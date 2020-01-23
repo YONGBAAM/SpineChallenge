@@ -64,12 +64,12 @@ def chw(nparr):
 #
 ##############################
 
-def plot_image(image, coord = None, segmap = None, ref_coord = None, ref_segmap = None, alpha = 0.3):
+def plot_image(image, coord = None, segmap = None, ref_coord = None, ref_segmap = None, alpha = 0.3, off_scaling = False):
     #다른기능은 생략하기로 하고
     #scale 255일경우
     if not type(image) == type(np.ones(2)): #for PIL image
         image = np.array(image)
-    if np.max(image) >1.0:
+    if np.max(image) >3.0:
         image = image/255
     if len(image.shape) ==2: #for HW
         image = hwc(image)
@@ -77,9 +77,13 @@ def plot_image(image, coord = None, segmap = None, ref_coord = None, ref_segmap 
         _,H,W = image.shape
         image = hwc(image.reshape(H,W))
 
-    image = denormalize_image(image)
+    if not off_scaling:
+        image = denormalize_image(image)
 
     H,W,C = image.shape
+
+    if segmap is None and coord is None:
+        plt.imshow(image)
 
     if segmap is not None:
         segmap = segmap.reshape(H, W)

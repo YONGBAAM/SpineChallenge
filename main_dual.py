@@ -100,7 +100,7 @@ from train import Trainer
 device = torch.device("cuda:0" if torch.cuda.is_available()  else "cpu")
 
 state_dict = {'testmode' : False, 'no_train' : N_train, 'no_val' : N_val,
-              'num_epochs': 200, 'learning_rates' : 3e-5,
+              'num_epochs': 1000, 'learning_rates' : 3e-5,
               'save_every' : 25, 'all_model_save' : 0.95,
               'is_lr_decay' : False
               }
@@ -143,14 +143,15 @@ h4 = nn.Sequential(
         nn.Linear(512, 136 + 8),
         SpinalStructured(output_dim=68)
     )
-for ind, c in enumerate([h1,h4]):
+for ind, c in enumerate([h4]):
     model = LandmarkNet(classifier = c)
     model = model.to(device)
-    state_dict['model_name'] = 'cl{}'.format(4-ind)
+    state_dict['model_name'] = 'cl4_200_'
     optim = torch.optim.Adam(model.parameters(), lr=state_dict['learning_rates'])
     crit = torch.nn.MSELoss()
     trainer = Trainer(model=model, optimizer=optim, loader_train=loader_train,
                       loader_val=loader_val, criterion=crit, **state_dict)
+    trainer.load_model('cl4_ep199_tL6.24e-04_vL3.24e-03.model')
 
     trainer.train()
 

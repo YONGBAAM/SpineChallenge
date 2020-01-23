@@ -35,7 +35,8 @@ class SpineDataset(Dataset):
             ##특정 트랜스폼은 lab에 적용 X!
             #lab = self.transform(lab)
         else:
-            img = transforms.ToTensor(img)
+            trs = transforms.ToTensor()
+            img = trs(img)
 
         if self.is_segment:
             lab = np.load(label_path)

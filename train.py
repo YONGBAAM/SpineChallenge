@@ -98,6 +98,10 @@ class Trainer():
         return losses
 
     def train(self):
+        print("Model Name : {}, Training Started".format(self.model_name))
+        print("VRAM : {}GB".format(torch.cuda.get_device_properties(self.device).total_memory/1000000))
+
+
         save_every = self.save_every
         all_model_save_thr = self.all_model_save
         num_epochs = self.num_epochs
