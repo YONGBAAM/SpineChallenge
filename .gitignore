@@ -1,0 +1,5 @@
+#all files will be ignored
+resized_labels/*.npy
+resized_images/*.jpg
+Old/
+model/
