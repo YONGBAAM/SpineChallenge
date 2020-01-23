@@ -5,3 +5,5 @@ Old/
 model/
 .idea/
 __pycache__/
+highres_images/
+highres_labels/
