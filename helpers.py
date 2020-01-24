@@ -82,6 +82,24 @@ def plot_image(image, coord = None, segmap = None, ref_coord = None, ref_segmap 
 
     H,W,C = image.shape
 
+    #imshow는 scatter 뒤에 해야 함!
+
+    if coord is not None:
+        coord = coord.reshape(-1, 2)
+        if coord[0][1] <1:
+            #Coord는 상대좌표
+            coord[:,0] *= W
+            coord[:,1] *= H
+        plt.scatter(coord[:, 0], coord[:, 1], s=1.2, c='red')
+        if ref_coord is not None:
+            ref_coord = ref_coord.reshape(-1, 2)
+            if ref_coord[0][1] < 1:
+                # Coord는 상대좌표
+                ref_coord[:, 0] *= W
+                ref_coord[:, 1] *= H
+            plt.scatter(ref_coord[:, 0], ref_coord[:, 1], s=1.2, c='green')
+        plt.imshow(image)
+
     if segmap is None and coord is None:
         plt.imshow(image)
 
@@ -98,31 +116,15 @@ def plot_image(image, coord = None, segmap = None, ref_coord = None, ref_segmap 
         else:
             plt.imshow(image * (1 - alpha) + segmap * alpha)
 
-    if coord is not None:
-        plt.imshow(image)
-        coord = coord.reshape(-1, 2)
-        if coord[0][1] <1:
-            #Coord는 상대좌표
-            coord[:,0] *= W
-            coord[:,1] *= H
-        plt.scatter(coord[:, 0], coord[:, 1], s=1.2, c='red')
-        if ref_coord is not None:
-            ref_coord = ref_coord.reshape(-1, 2)
-            if ref_coord[0][1] < 1:
-                # Coord는 상대좌표
-                ref_coord[:, 0] *= W
-                ref_coord[:, 1] *= H
-            plt.scatter(ref_coord[:, 0], ref_coord[:, 1], s=1.2, c='green')
+
 
 
 def preprocessing():
     #여기서 데이터 프리프로세싱 작업 하기
 
     #path declaration
-    image_dest_resized = './resized_images'
-    label_dest_resized = './resized_labels'
-    plot_dest_resized = './resized_plots'
-    plot_dest_highres = './plots'
+    # image_dest_resized = './resized_images'
+    # label_dest_resized = './resized_labels'
 
     image_path = './highres_images'
     label_path = './highres_labels'
@@ -139,9 +141,9 @@ def preprocessing():
     #     plot_image(image, coord = labels[ind], segmap=segmap )
     # plt.show()
 
-    #pad image
-    resized_H = 512
-    desired_W = 256
+    # #pad image
+    # resized_H = 512
+    # desired_W = 256
 
     label_list = []
 
@@ -151,31 +153,33 @@ def preprocessing():
         label = labels[data_no]
 
         H, W = np_image.shape
-        resize_ratio = resized_H / H
-        left_pad = int((desired_W - int(W * resize_ratio)) / 2)
-        right_pad = desired_W - int(W * resize_ratio) - left_pad
+        resized_H = H
+        desired_W = W
+        # resize_ratio = resized_H / H
+        # left_pad = int((desired_W - int(W * resize_ratio)) / 2)
+        # right_pad = desired_W - int(W * resize_ratio) - left_pad
+        #
+        # label_rev = label.reshape(-1,2)
+        # label_rev *= resize_ratio
+        # label_rev[:,0] += left_pad
+        # label_rev = label_rev.reshape(-1)
+        # label_list.append(label_rev)
+        #
+        # im_resize = image.resize((int(W * resize_ratio), int(resized_H)))
+        # im_pad = ImageOps.expand(im_resize, (left_pad, 0, right_pad, 0))
+        # im_pad.save(os.path.join(image_dest_resized, data_name))
 
-        label_rev = label.reshape(-1,2)
-        label_rev *= resize_ratio
-        label_rev[:,0] += left_pad
-        label_rev = label_rev.reshape(-1)
-        label_list.append(label_rev)
-
-        im_resize = image.resize((int(W * resize_ratio), int(resized_H)))
-        im_pad = ImageOps.expand(im_resize, (left_pad, 0, right_pad, 0))
-        im_pad.save(os.path.join(image_dest_resized, data_name))
-
-        segmap = draw_seg(label_rev, resized_H, desired_W)
-        np.save(os.path.join(label_dest_resized, data_name + '.npy'), segmap)
+        segmap = draw_seg(label, resized_H, desired_W)
+        np.save(os.path.join(label_path, data_name + '.npy'), segmap)
 
         if data_no%100 ==0:
-            print(np.asarray(im_pad).shape)
+            print(np.asarray(image).shape)
             plt.figure()
-            plot_image(im_pad, label_rev, segmap=segmap)
-            plt.show()
-    label_rev_all = np.asarray(label_list)
-    write_labels(label_rev_all, location = label_dest_resized)
-    write_data_names(data_names, location = label_dest_resized)
+            plot_image(image, label, segmap=segmap)
+    plt.show()
+    # label_rev_all = np.asarray(label_list)
+    # write_labels(label_rev_all, location = label_dest_resized)
+    # write_data_names(data_names, location = label_dest_resized)
 
 def write_relative_label():
     #read the absolute label and write relative label
@@ -216,18 +220,19 @@ def denormalize_image(image):
 
 
 if __name__  == '__main__':
-    plt.figure()
-    img = Image.open('./resized_images/sunhl-1th-02-Jan-2017-162 A AP.jpg')
-    img = np.asarray(img)/255.0
-    img = img/2 + 0.1
-
-    plt.imshow(img)
-    label = read_labels(location='./resized_labels', relative=True)
-    label = label[0].reshape(-1, 2)
-    label[:, 0] *= 256
-    label[:, 1] *= 512
-    plt.scatter(label[:, 0], label[:, 1])
-    plt.show()
-    plt.figure()
-    plot_image(img, coord = label)
-    plt.show()
+    preprocessing()
+    # plt.figure()
+    # img = Image.open('./resized_images/sunhl-1th-02-Jan-2017-162 A AP.jpg')
+    # img = np.asarray(img)/255.0
+    # img = img/2 + 0.1
+    #
+    # plt.imshow(img)
+    # label = read_labels(location='./resized_labels', relative=True)
+    # label = label[0].reshape(-1, 2)
+    # label[:, 0] *= 256
+    # label[:, 1] *= 512
+    # plt.scatter(label[:, 0], label[:, 1])
+    # plt.show()
+    # plt.figure()
+    # plot_image(img, coord = label)
+    # plt.show()

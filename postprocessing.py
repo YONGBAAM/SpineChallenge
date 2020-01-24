@@ -5,14 +5,11 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as tr
 from helpers import read_data_names, read_labels, plot_image, chw, hwc
-from dataset import SpineDataset
+from dataset import SpineDataset, CoordDataset
 from model import SegmentNet, LandmarkNet, get_classifier, SpinalStructured
 import torchvision.transforms.functional as TF
 import matplotlib.pyplot as plt
 from math import sqrt
-from skimage import data
-from skimage.feature import blob_dog, blob_log, blob_doh
-from skimage.color import rgb2gray
 import torch
 import math
 import sys
@@ -72,10 +69,49 @@ class CoordCustomPad:
         right_pad = desire_W - W - left_pad
         im_pad = TF.pad(image, padding=(left_pad, 0, right_pad, 0), padding_mode='constant')
 
-        r_label = label.reshape(-1,2)
-        r_label[:,0] += left_pad
+        label = label.reshape(-1,2)
+        r_label = np.zeros_like(label)
+        r_label[:,1] = label[:,1]
+        r_label[:,0] = label[:,0] + left_pad
 
         return im_pad, r_label
+
+class SegCustomPad:
+    def __init__(self, HoverW, fixH=True):
+        self.ratio = HoverW
+        self.fixH = fixH
+        self.fixW = not fixH
+
+    def __call__(self, image, segmap):
+        W, H = image.size
+
+        desire_W = int(H / self.ratio)
+        left_pad = int((desire_W - W) / 2)
+        right_pad = desire_W - W - left_pad
+        im_pad = TF.pad(image, padding=(left_pad, 0, right_pad, 0), padding_mode='constant')
+        seg_pad = TF.pad(image, padding=(left_pad, 0, right_pad, 0), padding_mode='constant')
+        return im_pad, seg_pad
+
+class CoordRandomRotate:
+    def __init__(self,max_angle, expand = False, is_random = True):
+        self.max_angle = max_angle
+        self.expand = expand
+        self.is_random = is_random
+    def __call__(self, image, label):
+        if self.is_random:
+            angle = np.random.uniform(-self.max_angle, self.max_angle)
+        else:
+            angle = self.max_angle
+
+        W1, H1 = image.size
+
+        image = image.rotate(angle, expand = self.expand)
+        if self.expand:
+            W2, H2 = image.size
+            label = rotate_label(label, angle, H = H1, W = W1, new_centerXY=(W2 / 2, H2 / 2))
+        else:
+            label = rotate_label(label, angle, H = H1, W = W1)
+        return image, label
 
 class CoordRandomRotate:
     def __init__(self,max_angle, expand = False, is_random = True):
@@ -173,72 +209,56 @@ class CoordLabelNormalize:
         r_label = r_label.reshape(-1)
         return image, r_label
 
-def transform_test():
-    data_path = './highres_images'
-    label_path = './resized_labels'
-    save_path = './model'
-    is_segment = True
-
-    ##ratio 일정하게 pad하는 custom transform
-
-    transform = tr.Compose([
-        #tr.ToPILImage(),
-        #tr.RandomPerspective(distortion_scale=0.2, p = 1),
-        # tr.RandomRotation(degrees= 15, expand = True),
-        # tr.Resize((512,256)),
-        CoordCustomPad(512 / 256),
-        tr.Resize((512,256)),
-
-        tr.ToTensor(),
-        tr.Normalize((0.5,), (0.5,))
-    ])
-
-    ##Get DataLoader
-    # get label and dataname list
-    coords_rel = read_labels(label_path, relative=True)
-    data_names = read_data_names(label_path)
-
-    N_all = len(data_names)
-    N_val = 0
-    N_train = N_all - N_val
-
-    # get train and validation data set
-    data_names_train = data_names
-    coords_train = coords_rel
-
-    dset_original = SpineDataset(data_path, label_path, data_names_train, coords_rel=coords_train, transform=transform
-                                 , is_segment=is_segment)
-    loader_original = DataLoader(dataset=dset_original, batch_size=4, shuffle=False)
-    #######Displaying the training data
-
-    toPIL = tr.ToPILImage()
-    toT = tr.ToTensor()
-
-
-    for val_data in loader_original:
-        imgs = val_data['image'].cpu().to(dtype=torch.float)
-        labels = val_data['label'].cpu().to(dtype=torch.float)
-
-
-        for ind, img in enumerate(imgs):#img is tensor
-            plt.figure()
-            img = np.asarray(img).reshape(512,256) #go to original image data : nparray (->PILimage)
-            t_img = img#transform(img)
-            # t_img = toPIL(img)
-            # t_img = TF.rotate(t_img, 15)
-            # t_img = toT(t_img)
-
-            #img = np.repeat(img.reshape(512,256,1), 3, axis = 2)
-            t_img = np.repeat(t_img.reshape(512, 256, 1), 3, axis=2)
-
-            plt.subplot(121)
-            plot_image(img)
-            plt.title('orig_{}'.format(ind))
-
-            plt.subplot(122)
-            plt.imshow(t_img)
-            plt.title('trans_{}'.format(ind))
-        plt.show()
+# def transform_test():
+#     data_path = './highres_images'
+#     label_path = './resized_labels'
+#     save_path = './model'
+#     is_segment = True
+#
+#     ##Get DataLoader
+#     # get label and dataname list
+#     data_names = read_data_names(label_path)
+#
+#
+#
+#     N_all = len(data_names)
+#     # get train and validation data set
+#     data_names_train = data_names
+#     coords_train = coords_rel
+#
+#     dset_original = SpineDataset(data_path, label_path, data_names_train, coords_rel=coords_train, transform=transform
+#                                  , is_segment=is_segment)
+#     loader_original = DataLoader(dataset=dset_original, batch_size=4, shuffle=False)
+#     #######Displaying the training data
+#
+#     toPIL = tr.ToPILImage()
+#     toT = tr.ToTensor()
+#
+#
+#     for val_data in loader_original:
+#         imgs = val_data['image'].cpu().to(dtype=torch.float)
+#         labels = val_data['label'].cpu().to(dtype=torch.float)
+#
+#
+#         for ind, img in enumerate(imgs):#img is tensor
+#             plt.figure()
+#             img = np.asarray(img).reshape(512,256) #go to original image data : nparray (->PILimage)
+#             t_img = img#transform(img)
+#             # t_img = toPIL(img)
+#             # t_img = TF.rotate(t_img, 15)
+#             # t_img = toT(t_img)
+#
+#             #img = np.repeat(img.reshape(512,256,1), 3, axis = 2)
+#             t_img = np.repeat(t_img.reshape(512, 256, 1), 3, axis=2)
+#
+#             plt.subplot(121)
+#             plot_image(img)
+#             plt.title('orig_{}'.format(ind))
+#
+#             plt.subplot(122)
+#             plt.imshow(t_img)
+#             plt.title('trans_{}'.format(ind))
+#         plt.show()
 
 def rotate_label(label, degree, H, W, new_centerXY=None):
 
@@ -257,95 +277,99 @@ def rotate_label(label, degree, H, W, new_centerXY=None):
     label = label.reshape(-1)
     return label
 
+def check_dataset(loader):
+    index = 0
+    for val_data in loader:
+        imgs = val_data['image'].cpu().to(dtype=torch.float)
+        labs = val_data['label'].cpu().to(dtype=torch.float)
+
+        plt.figure()
+        for ind in range(4):
+            img = imgs[ind]
+            lab = labs[ind]
+            col_no = 2
+            plt.subplot(201 + 10 * col_no + ind)
+            plot_image(image=img, coord=lab)
+        plt.show()
+
+def outlier_check(label, H, W, margin):
+    label_r = label.reshape(-1,2)
+
+    L = label[:,0] <0 + margin
+    R = label[:,0] >W -margin
+    U = label[:,1] <0 +margin
+    D = label[:,1] >H -margin
+    crit = np.sum(L) + np.sum(R) + np.sum(U) + np.sum(D)
+    if crit ==0:
+        return False
+    else:
+        return True
+
 if __name__ == '__main__':
 
     #def label-to-image
-    data_path = './resized_images'
-    label_path = './resized_labels'
+    data_path = './highres_images'
+    label_path = './highres_labels'
     labels = read_labels(location = label_path)
     data_names = read_data_names(location = label_path)
 
-    H = 512
-    W = 256
+    batch_size = 8
 
-    transform = tr.Compose([
-        tr.ToTensor()
-    ])
+    # transform = tr.Compose([
+    #     tr.RandomRotation(30, expand = False)
+    #     tr.ToTensor()
+    # ])
 
-    customTransform = [CoordCustomPad(512/256),
-                                  #CoordHorizontalFlip(1),
-                                  #CoordVerticalFlip(1),
-                                  CoordResize((646,210)),
-                       CoordLabelNormalize()
-                       ]
+    customTransforms = [
+    CoordCustomPad(512 / 256),
+    CoordResize((512, 256)),
+    CoordLabelNormalize()
+    ]
 
-    ##Get DataLoader
-    # get label and dataname list
-    N_all = len(data_names)
-    # get train and validation data set
-    data_names_train = data_names
-    coords_train = labels
-    dset_original = SpineDataset(data_path, label_path, data_names_train, coords_rel=coords_train, transform=tr.ToTensor()
-                                 , is_segment = False)
-    loader_original = DataLoader(dataset=dset_original, batch_size=6, shuffle=False)
+    # customTransforms = [
+    #                     CoordRandomRotate(max_angle = 5, expand = True, is_random =False),
+    #                     # CoordHorizontalFlip(0.5),
+    #                     # CoordVerticalFlip(0.5),
+    #                     CoordCustomPad(512 / 256),
+    #                     CoordResize((512, 256)),
+    #                     CoordLabelNormalize()
+    #                     ]
+    #
+    # data_path = './resized_images'
+    # label_path = './resized_labels'
+    # for ind, data_name in enumerate(data_names):
+    #     img = Image.open(os.path.join(data_path, data_names[ind]))
+    #     seg = np.load(os.path.join(label_path, data_name + '.npy'))
+    #     seg = tr.ToPILImage(seg)
+    #     img, seg = customTransforms[0](img, seg)
+    #     plt.figure()
+    #     plt.subplot(211)
+    #     plt.imshow(img)
+    #     plt.subplot(212)
+    #     plt.imshow(seg)
+    #     plt.show()
 
-    randrot = CoordRandomRotate(max_angle = 30, expand = True, is_random = True)
+
+    dset = CoordDataset(data_path, labels, data_names, transform_list=customTransforms)
+    loader_original = DataLoader(dataset=dset, batch_size=batch_size, shuffle=False)
 
     index = 0
     for val_data in loader_original:
         imgs = val_data['image'].cpu().to(dtype=torch.float)
+        labs = val_data['label'].cpu().to(dtype=torch.float)
+        for ind in range(batch_size):
 
-        for ind, img in enumerate(imgs):#img is tensor
-            plt.figure()
-            index = index + 1
-            img = np.asarray(img).reshape(512,256) #go to original image data : nparray (->PILimage)
-            img = tr.ToPILImage()(img)
-            label = labels[ind]
+            img = imgs[ind]
+            lab = labs[ind]
 
-            t_img, t_label = (img, label)
-            for trans in customTransform:
-                t_img, t_label = trans(t_img, t_label)
 
-            #t_label = np.round(t_label, 0)
-            # t_img = toPIL(img)
-            # t_img = TF.rotate(t_img, 15)
-            # t_img = toT(t_img)
-            #t_img = t_img.reshape(512,256)
-            #img = np.repeat(img.reshape(512,256,1), 3, axis = 2)
-            #t_img = np.repeat(t_img.reshape(512, 256, 1), 3, axis=2)
 
-            plt.subplot(121)
-            plot_image(img, coord = label)
-            plt.title('orig_{}'.format(ind))
 
-            plt.subplot(122)
-            #plt.imshow(t_img)
-            plot_image(t_img, t_label)
-            plt.title('trans_{}'.format(ind))
-        plt.show()
-
-    #
-    #
-    #     dot_image = np.zeros((H, W, 3))
-    #     for c,r in label:
-    #         rr,cc = circle(r,c,radius = 2)
-    #         dot_image[rr, cc, :] = 1
-    #     #detecting
-    #
-    #     blobs_log = blob_log(dot_image)
-    #     detected_image = np.zeros((H,W,3))
-    #     for ind, blob in enumerate(blobs_log):
-    #         y,x,_,_= blob
-    #         rr,cc = circle(y,x, radius = 2)
-    #         detected_image[rr,cc,:] = 1
-    #
-    #     plt.figure()
-    #     plt.subplot(121)
-    #     plt.imshow(dot_image)
-    #     plt.subplot(122)
-    #     plt.imshow(detected_image)
-    #     plt.title('all:{}'.format(ind))
-    #     plt.show()
-    #
-    # #make transform
-    # #compare result : error? 68점 다 찾는지?
+        # plt.figure()
+        # for ind in range(batch_size):
+        #     img = imgs[ind]
+        #     lab = labs[ind]
+        #     col_no = int(batch_size/2)
+        #     plt.subplot(201 + 10*col_no+ind)
+        #     plot_image(image = img, coord = lab)
+        # plt.show()

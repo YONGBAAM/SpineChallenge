@@ -131,35 +131,80 @@ class SpinalStructured(nn.Module):
         self.S = self.S.to(*args, **kwargs)
         return self
 
-def get_feature_extractor(requires_grad = False):
+def get_feature_extractor(requires_grad = False, PoolDrop = False):
     resnet_based = torchvision.models.resnet101(pretrained=True)
     for param in resnet_based.parameters():
         param.requires_grad = requires_grad
-    fe = nn.Sequential(*list(resnet_based.children())[:-1])
+    if PoolDrop:
+        fe = nn.Sequential(*list(resnet_based.children())[:-2])
+    else:
+        fe = nn.Sequential(*list(resnet_based.children())[:-1])
     return fe
 
 
+def get_classifier_conv(dropout = 0, with_spine = False):
+    lst = [nn.Conv2d(2048,512,kernel_size=(1,1)), #16 8
+        nn.BatchNorm2d(512),
+        nn.ReLU(),
+        nn.Conv2d(512,512,3, padding = 1), #16 8
+        nn.BatchNorm2d(512),
+        nn.ReLU(),
+        nn.Conv2d(512,512,3,padding = 1),
+        nn.BatchNorm2d(512),
+        nn.ReLU(), #128*16*8
+        nn.AdaptiveAvgPool2d(output_size = (2,2)),
+        nn.Flatten(),
+        nn.Linear(512*2*2,512),
+        nn.ReLU(),
+        nn.Dropout(dropout)
+    ]
+    if with_spine:
+        lst.append(nn.Linear(512,136+8))
+        lst.append(SpinalStructured())
+    else:
+        lst.append(nn.Linear(512,136))
+
+    classifier = nn.Sequential(*lst)
+    return classifier
 
 def get_classifier():
     classifier = nn.Sequential(
         nn.Flatten(),#2048 for resnet 101
-        nn.Linear(2048,2048),
+        nn.Linear(2048,4096),
+        nn.ReLU(),
+        nn.Linear(4096, 2048),
         nn.ReLU(),
         nn.Linear(2048, 1024),
         nn.ReLU(),
-        nn.Linear(1024, 136 + 8),
-        SpinalStructured(output_dim=68)
+        nn.Linear(1024,512),
+        nn.ReLU(),
+        nn.Linear(512,136)
+        # nn.Linear(512, 136 + 8),
+        # SpinalStructured(output_dim=68)
     )
+
     return classifier
 
 class LandmarkNet(nn.Module):
-    def __init__(self, classifier = None, requires_grad = False):
+    def __init__(self, classifier = None,PoolDrop = False, requires_grad = False):
         super(LandmarkNet, self).__init__()
-        self.extractor = get_feature_extractor(requires_grad=requires_grad)
-        if classifier == None:
-            self.classifier = get_classifier()
-        else:
-            self.classifier = classifier
+
+        self.extractor = get_feature_extractor(requires_grad=requires_grad, PoolDrop = PoolDrop)
+
+        if PoolDrop:
+            if classifier == None:
+                self.classifier = get_classifier_conv(dropout = 0)
+            else:
+                self.classifier = classifier
+        else:#Legacy
+            if classifier == None:
+                self.classifier = get_classifier()
+            else:
+                self.classifier = classifier
+
+
+
+
 
     def forward(self, x):
         if x.shape[1] ==1:#grayscale image
@@ -174,71 +219,81 @@ class LandmarkNet(nn.Module):
 
 
 if __name__ == '__main__':
-    import pandas as pd
     import numpy as np
     import os
-    import scipy.io as spio
-    from torch.utils.data import Dataset, DataLoader
-    import matplotlib.pyplot as plt
-    from model import BoostLayer
     import torch
     import torch.nn as nn
-    from model import SpineNet
-    from dataset import SpineDataset
+    from torch.utils.data import Dataset, DataLoader
     import torchvision.transforms as transforms
 
-    data_path = './resized_images'
-    label_path = './resized_labels'
-    save_path = './model'
+    from helpers import read_data_names, read_labels, plot_image, chw, hwc
+    from dataset import SpineDataset, CoordDataset
+    from model import SegmentNet, LandmarkNet, get_classifier, SpinalStructured
+    from postprocessing import CoordDataset, CoordCustomPad, CoordHorizontalFlip, CoordRandomRotate, \
+        CoordLabelNormalize, CoordResize, CoordVerticalFlip
 
-    val_ratio = 0.1
-    batch_size = 2
+    #def label-to-image
+    data_path = './highres_images'
+    label_path = './highres_labels'
+    labels = read_labels(location = label_path)
+    data_names = read_data_names(location = label_path)
 
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.5,), (0.5,)),
-    ])
-    from helpers import read_data_names, read_labels
-    ##Get DataLoader
-    # get label and dataname list
-    labels = read_labels(label_path)
-    data_names = read_data_names(label_path)
+    batch_size = 8
 
-    N_all = len(data_names)
-    N_val = int(N_all * val_ratio)
-    N_train = N_all - N_val
+    # transform = tr.Compose([
+    #     tr.RandomRotation(30, expand = False)
+    #     tr.ToTensor()
+    # ])
 
-    # get train and validation data set
-    data_names_train = []
-    data_names_val = []
-    label_train = []  # np.zeros(N_train, label.shape[1])
-    label_val = []  # np.zeros(N_val, label.shape[1])
+    customTransforms = [
+    CoordCustomPad(512 / 256),
+    CoordResize((512, 256)),
+    CoordLabelNormalize()
+    ]
 
-    if True:
-        permutation = np.random.permutation(N_all)
-        for ind in permutation[:N_train]:
-            data_names_train.append(data_names[ind])
-            label_train.append(labels[ind])
-        for ind in permutation[N_train:]:
-            data_names_val.append(data_names[ind])
-            label_val.append(labels[ind])
+    # customTransforms = [
+    #                     CoordRandomRotate(max_angle = 5, expand = True, is_random =False),
+    #                     # CoordHorizontalFlip(0.5),
+    #                     # CoordVerticalFlip(0.5),
+    #                     CoordCustomPad(512 / 256),
+    #                     CoordResize((512, 256)),
+    #                     CoordLabelNormalize()
+    #                     ]
+    #
+    # data_path = './resized_images'
+    # label_path = './resized_labels'
+    # for ind, data_name in enumerate(data_names):
+    #     img = Image.open(os.path.join(data_path, data_names[ind]))
+    #     seg = np.load(os.path.join(label_path, data_name + '.npy'))
+    #     seg = tr.ToPILImage(seg)
+    #     img, seg = customTransforms[0](img, seg)
+    #     plt.figure()
+    #     plt.subplot(211)
+    #     plt.imshow(img)
+    #     plt.subplot(212)
+    #     plt.imshow(seg)
+    #     plt.show()
 
-        label_val = np.asarray(label_val)
-        label_train = np.asarray(label_train)
 
-    dset_train = SpineDataset(data_path, label_train, data_names=data_names_train, transform=transform)
-    loader_train = DataLoader(dataset=dset_train, batch_size=batch_size, shuffle=True)
+    dset = CoordDataset(data_path, labels, data_names, transform_list=customTransforms)
+    loader_original = DataLoader(dataset=dset, batch_size=batch_size, shuffle=False)
 
-    _train_data = next(iter(loader_train))
+    # for val_data in loader_original:
+    #     imgs = val_data['image'].cpu().to(dtype=torch.float)
+    #     labs = val_data['label'].cpu().to(dtype=torch.float)
+    #     for ind in range(batch_size):
+    #         img = imgs[ind]
+    #         lab = labs[ind]
+
+    _train_data = next(iter(loader_original))
     _imgs = _train_data['image']
     _labels = _train_data['label']
+    _imgs = _imgs.repeat((1,3,1,1))
+    ext = get_feature_extractor()
+    out = ext(_imgs)
+    print(out.shape)
+    #512 256은 8 2048 16 8 나옴
 
-    model = SegmentNet()
-
-    ys = model(_imgs)
-
-    for y in ys:
-        print('{}'.format(y[0].shape))
 
 
 #class BoostLayer(nn.Module):

@@ -196,9 +196,10 @@ class Trainer():
 
                 plt.subplot(221 + i)
                 if self.is_landmark == True:
-                    plot_image(imgs[ind], coord=val_labels[ind], ref_coord = true_labels[ind])
+                    #plot_image(imgs[ind], ref_coord=true_labels[ind], coord = val_labels[ind])
+                    plot_image(imgs[ind], coord=true_labels[ind], ref_coord=val_labels[ind])
                 elif self.is_landmark == False:
-                    plot_image(imgs[ind], segmap = val_labels[ind], ref_segmap=true_labels[ind])
+                    plot_image(imgs[ind], segmap = true_labels[ind], ref_segmap=val_labels[ind])
                 plt.title('val {}'.format(perm[i]))
 
             plt.savefig(os.path.join(self.model_save_path, title_if_plot_save + '.png'))
