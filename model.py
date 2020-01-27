@@ -159,7 +159,11 @@ def get_classifier_deep(dropout = 0.5):
         nn.BatchNorm2d(128),
         nn.ReLU(),  #16*8
 
-        nn.AdaptiveAvgPool2d(output_size=(8, 4)),
+        #nn.AdaptiveAvgPool2d(output_size=(8, 4)),
+        nn.Conv2d(128,128,kernel_size=(4,4), stride = 2, padding=1),  #8 * 4
+        nn.BatchNorm2d(128),
+        nn.ReLU(),
+
         nn.Flatten(),
         nn.Linear(8*4*128, 1024),
         nn.ReLU(),
