@@ -56,16 +56,29 @@ else:
 
 
 class CoordCustomPad:
-    def __init__(self, HoverW, fixH=True):
+    def __init__(self, HoverW, fixH=True, random = False):
         self.ratio = HoverW
         self.fixH = fixH
         self.fixW = not fixH
+        self.random_mode = random
 
     def __call__(self, image, label):
         W, H = image.size
 
         desire_W = int(H / self.ratio)
-        left_pad = int((desire_W - W) / 2)
+
+        if self.random_mode == False:
+            left_pad = int((desire_W - W) / 2)
+        elif self.random_mode == 'gaussian':
+            mean_pad = (desire_W -W)/2
+            sd = (desire_W -W)/4
+            left_pad = int(np.random.normal(mean_pad, sd))
+            left_pad = np.clip(left_pad, 0, desire_W-W)
+
+        elif self.random_mode == 'uniform':
+            left_pad = int(np.random.uniform(0,desire_W-W))
+
+
         right_pad = desire_W - W - left_pad
         im_pad = TF.pad(image, padding=(left_pad, 0, right_pad, 0), padding_mode='constant')
 

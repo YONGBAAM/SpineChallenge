@@ -141,8 +141,38 @@ def get_feature_extractor(requires_grad = False, PoolDrop = False):
         fe = nn.Sequential(*list(resnet_based.children())[:-1])
     return fe
 
+def get_classifier_deep(dropout = 0.5):
+    lst = [
+        nn.Conv2d(2048, 512, kernel_size=(1, 1)),  # 16 8
+        nn.BatchNorm2d(512),
+        nn.ReLU(),
 
-def get_classifier_conv(dropout = 0, with_spine = False):
+        nn.Conv2d(512, 512, 3, padding=1),  # 16 8
+        nn.BatchNorm2d(512),
+        nn.ReLU(),
+
+        nn.Conv2d(512, 128, kernel_size=(1, 1)),  # 16 8
+        nn.BatchNorm2d(128),
+        nn.ReLU(),
+
+        nn.Conv2d(128, 128, 3, padding=1),
+        nn.BatchNorm2d(128),
+        nn.ReLU(),  #16*8
+
+        nn.AdaptiveAvgPool2d(output_size=(8, 4)),
+        nn.Flatten(),
+        nn.Linear(8*4*128, 1024),
+        nn.ReLU(),
+        nn.Dropout(dropout),
+
+        nn.Linear(1024,136)
+
+        ]
+    classifier = nn.Sequential(*lst)
+    return classifier
+
+
+def get_classifier_conv(dropout = 0.5, with_spine = False):
     lst = [nn.Conv2d(2048,512,kernel_size=(1,1)), #16 8
         nn.BatchNorm2d(512),
         nn.ReLU(),
@@ -159,30 +189,11 @@ def get_classifier_conv(dropout = 0, with_spine = False):
         nn.Dropout(dropout)
     ]
     if with_spine:
-        lst.append(nn.Linear(512,136+8))
-        lst.append(SpinalStructured())
+        print("Do not Use it")
     else:
         lst.append(nn.Linear(512,136))
 
     classifier = nn.Sequential(*lst)
-    return classifier
-
-def get_classifier():
-    classifier = nn.Sequential(
-        nn.Flatten(),#2048 for resnet 101
-        nn.Linear(2048,4096),
-        nn.ReLU(),
-        nn.Linear(4096, 2048),
-        nn.ReLU(),
-        nn.Linear(2048, 1024),
-        nn.ReLU(),
-        nn.Linear(1024,512),
-        nn.ReLU(),
-        nn.Linear(512,136)
-        # nn.Linear(512, 136 + 8),
-        # SpinalStructured(output_dim=68)
-    )
-
     return classifier
 
 class LandmarkNet(nn.Module):
@@ -197,10 +208,7 @@ class LandmarkNet(nn.Module):
             else:
                 self.classifier = classifier
         else:#Legacy
-            if classifier == None:
-                self.classifier = get_classifier()
-            else:
-                self.classifier = classifier
+            print('Do not use it')
 
 
 

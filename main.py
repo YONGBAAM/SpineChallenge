@@ -7,7 +7,7 @@ import torchvision.transforms as transforms
 
 from helpers import read_data_names, read_labels, plot_image, chw, hwc
 from dataset import SpineDataset, CoordDataset
-from model import SegmentNet, LandmarkNet, get_classifier, SpinalStructured, get_classifier_conv
+from model import SegmentNet, LandmarkNet, get_classifier_deep, SpinalStructured, get_classifier_conv
 from postprocessing import CoordDataset, CoordCustomPad, CoordHorizontalFlip,CoordRandomRotate, CoordLabelNormalize, CoordResize, CoordVerticalFlip
 
 '''
@@ -17,6 +17,23 @@ from postprocessing import CoordDataset, CoordCustomPad, CoordHorizontalFlip,Coo
 
 + seg map이랑 해서 앙상블하자 이건 어쩔수없다.
 일단 이것만해서 후처리하기 화요일 올인!
+
+test loader랑 같이 해서 전체파일 수정하자!!
+
+Segmap변환
+일단 이때까지한거랑
+랜덤 블러같은거
+할수있는건 다 하자!!!!
+
+BNC가 중요하다 Brightness and Contrast
+
+segmain 따로만들기
+
+Segment 아키텍쳐는 지금있는거로 ㄱㅊ 
+아 귀찮아 그냥 이걸로 하자
+세그멘트 짜지 말것!!
+이거만 랩미팅에서 소개하고 이걸로 진행하기!!
+세그멘트도 이런곳에서 똑같이 안됬다고 하자
 
 '''
 
@@ -39,8 +56,9 @@ from postprocessing import CoordDataset, CoordCustomPad, CoordHorizontalFlip,Coo
 data_path = './highres_images'
 label_path = './highres_labels'
 
-val_ratio = 0.0
-batch_size = 64
+val_ratio = 0.1
+batch_size = 96
+
 
 labels = read_labels(label_path)
 data_names = read_data_names(label_path)
@@ -82,15 +100,6 @@ for ind in permutation[N_train:]:
     labels_val.append(labels[ind])
 labels_val = np.asarray(labels_val)
 
-RHV = [
-                       CoordRandomRotate(max_angle = 10, expand = False),
-                        CoordHorizontalFlip(0.5),
-                        CoordVerticalFlip(0.5),
-                        CoordCustomPad(512 /256),
-                        CoordResize((512,256)),
-                        CoordLabelNormalize()
-                       ]
-
 RH = [
                        CoordRandomRotate(max_angle = 10, expand = False),
                         CoordHorizontalFlip(0.5),
@@ -98,63 +107,152 @@ RH = [
                         CoordResize((512,256)),
                         CoordLabelNormalize()
                        ]
+NOPAD = [
+                       CoordRandomRotate(max_angle = 10, expand = False),
+                        CoordHorizontalFlip(0.5),
+#                        CoordCustomPad(512 /256),
+                        CoordResize((512,256)),
+                        CoordLabelNormalize()
+                       ]
+GAU = [
+                       CoordRandomRotate(max_angle = 10, expand = False),
+                        CoordHorizontalFlip(0.5),
+                        CoordCustomPad(512 /256, random = 'gaussian'),
+                        CoordResize((512,256)),
+                        CoordLabelNormalize()
+                       ]
+UNF = [
+                       CoordRandomRotate(max_angle = 10, expand = False),
+                        CoordHorizontalFlip(0.5),
+                        CoordCustomPad(512 /256, random = 'uniform'),
+                        CoordResize((512,256)),
+                        CoordLabelNormalize()
+                       ]
 
-smooth = torch.nn.SmoothL1Loss()
-MSE = torch.nn.MSELoss()
+######################TRANSFORM 여기선 트랜스폼만
+customTransforms = RH
+#########################
+dset_train = CoordDataset(data_path, labels_train, data_names_train, transform_list=customTransforms)
+dset_val = CoordDataset(data_path, labels_val, data_names_val, transform_list=[
+#    CoordCustomPad(512 / 256),
+    CoordResize((512, 256)),
+    CoordLabelNormalize()
+])
 
-for is_lr_decay, name  in [(True,'FINALL_DEC'), (False, 'FINALL_NODEC')]:
-    #고정
-    customTransforms = RH
-    crit = smooth
+loader_train = DataLoader(dataset=dset_train, batch_size=batch_size, shuffle=True)
+loader_val = DataLoader(dataset=dset_val, batch_size=4, shuffle=False)
 
-    dset_train = CoordDataset(data_path, labels_train, data_names_train, transform_list=customTransforms)
-    dset_val = CoordDataset(data_path, labels_val, data_names_val, transform_list=[
-        CoordCustomPad(512 / 256),
-        CoordResize((512, 256)),
-        CoordLabelNormalize()
-    ])
+###################################
+# TRAINING           ##############
+###################################
+from train import Trainer
+state_dict = dict(num_epochs=500, learning_rates=1e-5, save_every=25,
+                  all_model_save=0.99,
+                  is_lr_decay=False, lrdecay_thres=0.1, lrdecay_every=200,
+                  model_save_path="D:\\TorchModels", dropout_prob=0.5
+                  )
+state_dict['model_name'] = 'NOPAD'
 
-    loader_train = DataLoader(dataset=dset_train, batch_size=batch_size, shuffle=True)
-    loader_val = DataLoader(dataset=dset_val, batch_size=4, shuffle=False)
+# load_name = 'RH_SM_all_ep1999_tL1.45e-03_vL6.31e-04.model'
+classifier = get_classifier_conv(dropout=state_dict['dropout_prob'])
+#classifier = get_classifier_deep(dropout=state_dict['dropout_prob'])
+model = LandmarkNet(PoolDrop=True, classifier=classifier).to(device)
+trainer = Trainer(model=model,
+                  optimizer=torch.optim.Adam(model.parameters(), lr=state_dict['learning_rates']),
+#                  loader_train=loader_train, loader_val=loader_train, criterion=nn.SmoothL1Loss(), **state_dict)
+                    loader_train = loader_train, loader_val = loader_val, criterion = nn.SmoothL1Loss(), ** state_dict)
+# loader_train=loader_train, loader_val=loader_val, criterion=torch.nn.MSELoss(), **state_dict)
 
-    from postprocessing import check_dataset
-    # check_dataset(loader_val)
-
-    ###Testing the Training data
-    # _train_data = next(iter(loader_train))
-    # _imgs= _train_data['image']
-    # _labels = _train_data['label']
-    # _lb = _labels[0]
-    # print(np.average(_lb))
-
-    ###################################
-    # TRAINING           ###############
-    ###################################
-    from train import Trainer
-
-    is_lr_decay = is_lr_decay
-    state_dict = dict(num_epochs=2000, learning_rates=1e-5, save_every=100,
-                      all_model_save=0.99,
-                      is_lr_decay=is_lr_decay, lrdecay_thres=0.1, lrdecay_every = 400,
-                      model_save_path="D:\\TorchModels", dropout_prob=0.5
-                      )
-
-    state_dict['model_name'] = name
-    #load_name = 'RH_SM_all_ep1999_tL1.45e-03_vL6.31e-04.model'
-
-    model = LandmarkNet(PoolDrop=True, classifier=get_classifier_conv(dropout=state_dict['dropout_prob'])).to(device)
-    trainer = Trainer(model=model,
-                      optimizer=torch.optim.Adam(model.parameters(), lr=state_dict['learning_rates']),
-                      loader_train=loader_train, loader_val=loader_train, criterion=crit, **state_dict)
-                      #loader_train=loader_train, loader_val=loader_val, criterion=crit, **state_dict)
-                      #loader_train=loader_train, loader_val=loader_val, criterion=torch.nn.MSELoss(), **state_dict)
-
-    #trainer.load_model(title=load_name, all=True)
-    #tl = trainer.test(test_loader=loader_val, title=state_dict['model_name'] + '_init')
-
-    trainer.train()
+# trainer.load_model(title=load_name, all=True)
+# tl = trainer.test(test_loader=loader_val, title=state_dict['model_name'] + '_init')
+trainer.train()
 
 
+#####
+#
+#
+#
+######
+
+######################TRANSFORM 여기선 트랜스폼만
+customTransforms = UNF
+#########################
+dset_train = CoordDataset(data_path, labels_train, data_names_train, transform_list=customTransforms)
+dset_val = CoordDataset(data_path, labels_val, data_names_val, transform_list=[
+    CoordCustomPad(512 / 256),
+    CoordResize((512, 256)),
+    CoordLabelNormalize()
+])
+
+loader_train = DataLoader(dataset=dset_train, batch_size=batch_size, shuffle=True)
+loader_val = DataLoader(dataset=dset_val, batch_size=4, shuffle=False)
+
+###################################
+# TRAINING           ##############
+###################################
+from train import Trainer
+state_dict = dict(num_epochs=500, learning_rates=1e-5, save_every=25,
+                  all_model_save=0.99,
+                  is_lr_decay=False, lrdecay_thres=0.1, lrdecay_every=200,
+                  model_save_path="D:\\TorchModels", dropout_prob=0.5
+                  )
+state_dict['model_name'] = 'UNF'
+
+# load_name = 'RH_SM_all_ep1999_tL1.45e-03_vL6.31e-04.model'
+
+model = LandmarkNet(PoolDrop=True, classifier=get_classifier_conv(dropout=state_dict['dropout_prob'])).to(device)
+trainer = Trainer(model=model,
+                  optimizer=torch.optim.Adam(model.parameters(), lr=state_dict['learning_rates']),
+#                  loader_train=loader_train, loader_val=loader_train, criterion=nn.SmoothL1Loss(), **state_dict)
+                 loader_train=loader_train, loader_val=loader_val, criterion=nn.SmoothL1Loss(), **state_dict)
+# loader_train=loader_train, loader_val=loader_val, criterion=torch.nn.MSELoss(), **state_dict)
+
+# trainer.load_model(title=load_name, all=True)
+# tl = trainer.test(test_loader=loader_val, title=state_dict['model_name'] + '_init')
+trainer.train()
+
+#####
+#
+#
+#
+######
+
+######################TRANSFORM 여기선 트랜스폼만
+customTransforms = GAU
+#########################
+dset_train = CoordDataset(data_path, labels_train, data_names_train, transform_list=customTransforms)
+dset_val = CoordDataset(data_path, labels_val, data_names_val, transform_list=[
+    CoordCustomPad(512 / 256),
+    CoordResize((512, 256)),
+    CoordLabelNormalize()
+])
+
+loader_train = DataLoader(dataset=dset_train, batch_size=batch_size, shuffle=True)
+loader_val = DataLoader(dataset=dset_val, batch_size=4, shuffle=False)
+
+###################################
+# TRAINING           ##############
+###################################
+from train import Trainer
+state_dict = dict(num_epochs=500, learning_rates=1e-5, save_every=25,
+                  all_model_save=0.99,
+                  is_lr_decay=False, lrdecay_thres=0.1, lrdecay_every=200,
+                  model_save_path="D:\\TorchModels", dropout_prob=0.5
+                  )
+state_dict['model_name'] = 'GAU'
+
+# load_name = 'RH_SM_all_ep1999_tL1.45e-03_vL6.31e-04.model'
+
+model = LandmarkNet(PoolDrop=True, classifier=get_classifier_conv(dropout=state_dict['dropout_prob'])).to(device)
+trainer = Trainer(model=model,
+                  optimizer=torch.optim.Adam(model.parameters(), lr=state_dict['learning_rates']),
+#                  loader_train=loader_train, loader_val=loader_train, criterion=nn.SmoothL1Loss(), **state_dict)
+                 loader_train=loader_train, loader_val=loader_val, criterion=nn.SmoothL1Loss(), **state_dict)
+# loader_train=loader_train, loader_val=loader_val, criterion=torch.nn.MSELoss(), **state_dict)
+
+# trainer.load_model(title=load_name, all=True)
+# tl = trainer.test(test_loader=loader_val, title=state_dict['model_name'] + '_init')
+trainer.train()
 '''
 #########################################33
 #
