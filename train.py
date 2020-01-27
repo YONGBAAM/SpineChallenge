@@ -31,10 +31,15 @@ class Trainer():
         #DEFALUT value means test condition
         self.num_epochs = kwargs.get('num_epochs', None)
         self.testmode = kwargs.get('testmode', False)
-        self.no_train = kwargs.get('no_train')
-        self.no_val = kwargs.get('no_val')
+        self.no_train = loader_train.dataset.size
+        self.no_val = loader_val.dataset.size
+
+        self.learning_rates = kwargs.get('learning_rates', 1e-4)
         self.lrdecay_thres = kwargs.get('lrdecay_thres', 0.1)
         self.is_lr_decay = kwargs.get('is_lr_decay', False)
+        self.lrdecay_every = kwargs.get('lrdecay_every', 500)
+        self.last_lrdecay = 0
+        self.dropout_prob = kwargs.get('dropout_prob', 0)
 
         self.save_every = kwargs.get('save_every', 1)
         self.all_model_save = kwargs.get('all_model_save', 0)
@@ -63,7 +68,10 @@ class Trainer():
 
         #self.data_path_train = kwargs.pop(['data_path_train'])
         #self.label_path_train = kwargs.pop(['label_path_train'])
-        self.model_save_path = kwargs.get('model_save_path', './model')
+        save_loc = kwargs.get('model_save_path', './model')
+        self.model_save_path = os.path.join(save_loc, self.model_name)
+        if not os.path.exists(self.model_save_path):
+            os.makedirs(self.model_save_path)
 
         self.device = next(self.model.parameters()).device
 
@@ -116,35 +124,60 @@ class Trainer():
             val_losses = self.validate()
             self.val_loss_list.append(np.average(val_losses))
             print("ep %d, loss_t %.2e, loss_v %.2e"%(ep, np.average(losses), np.average(val_losses)))
+            if self.is_lr_decay:
+                self.lr_decay()
 
             if ep > save_morethan or ep%save_every == 0 or ep == num_epochs -1:
                 title = self.model_name + '_ep%d' % (ep)
 
                 val_losses = self.validate(title_if_plot_save = title)
-                self.save_model(title + '_tL%.2e_vL%.2e'%(np.average(losses), np.average(val_losses)))
+                self.save_model(title + '_tL%.2e_vL%.2e'%(np.average(losses), np.average(val_losses)), all = True)
                 self.update_log(logline = 'ep{} model saved : {}'.format(ep, title))
-                if self.is_lr_decay:
-                    self.lr_decay()
-
                 self.save_loss(title=title)
                 self.save_log(title=title)
 
-    def save_model(self, title):
+    def save_model(self, title, all = False):
         if  not title[-6:] == '.model':
             title = title + '.model'
-        if self.is_landmark == True:
-            torch.save(self.model.classifier.state_dict(), os.path.join(self.model_save_path, title))
-        else:
+
+        if all:
+            # for line in list(self.model.state_dict()):
+            #     print(line)
+            #     self.update_log(line)
             torch.save(self.model.state_dict(), os.path.join(self.model_save_path, title))
+        else:
+            print('Deprecated, save all state dict')
+            # if self.is_landmark:
+            #     torch.save(self.model.classifier.state_dict(), os.path.join(self.model_save_path, title))
+            # else:
+            #     torch.save(self.model.state_dict(), os.path.join(self.model_save_path, title))
 
 
-    def load_model(self, title):
+
+
+    def load_model(self, title, all = False):
         if  not title[-6:] == '.model':
             title = title + '.model'
-        if self.is_landmark == True:
-            self.model.classifier.load_state_dict(torch.load(os.path.join(self.model_save_path, title)))
-        else:
+        #현재 path에 모델 있으면 불러오기
+        #아니면 올라가서 찾자
+
+        if not all:
+            print('Deprecated, load all state dict')
+            return
+
+        if os.path.exists(os.path.join(self.model_save_path, title)):
+            model_load_path = os.path.join(self.model_save_path, title)
+            print('loading {}'.format(model_load_path))
             self.model.load_state_dict(torch.load(os.path.join(self.model_save_path, title)))
+        else:
+            up_path = self.model_save_path.split('\\')
+            up_path = '/'.join(up_path[:-1])
+            folder = title.split('ep')[0]
+            folder = folder[:-1]
+            model_load_path = os.path.join(up_path,folder, title)
+            print('loading {}'.format(model_load_path))
+            self.model.load_state_dict(torch.load(model_load_path))
+
 
     def save_config(self, title):
         #save the parameters of training
@@ -203,6 +236,7 @@ class Trainer():
                 plt.title('val {}'.format(perm[i]))
 
             plt.savefig(os.path.join(self.model_save_path, title_if_plot_save + '.png'))
+            plt.close()
 
         return val_losses
 
@@ -210,25 +244,27 @@ class Trainer():
         #plot and save image all
 
         if load_model_name is not None:
-            self.load_model(load_model_name)
-            print('Model loaded for test, reusing loaded model')
+            self.load_model(load_model_name, all = True)
+            print('Loading {}'.format(load_model_name))
 
         if test_loader == None:
             #make testloader
             #val로 하고싶으면 loader 주면 된다!!!!!
             print('not implemented yet :D')
 
+        test_crit = nn.MSELoss()
+
         self.model.eval()
         test_losses = []
         test_labels = []
         img_list = []
         true_labels = []
-        for test_data in self.loader_val:
+        for test_data in test_loader:
             self.model.zero_grad()
             imgs = test_data['image'].to(self.device, dtype=torch.float)
             labels = test_data['label'].to(self.device, dtype=torch.float)
             out = self.model(imgs)
-            loss = self.criterion(out, labels)
+            loss = test_crit(out, labels)
             test_losses.append(loss.item())
 
             # for save validation
@@ -246,11 +282,13 @@ class Trainer():
         for ind in range(imgs.shape[0]):
             plt.figure()
             if self.is_landmark == True:
-                plot_image(imgs[ind], coord=test_labels[ind], ref_coord=true_labels[ind])
+                plot_image(imgs[ind], coord=true_labels[ind], ref_coord=test_labels[ind])
             elif self.is_landmark == False:
                 plot_image(imgs[ind], segmap=test_labels[ind], ref_segmap=true_labels[ind])
             plt.title(title + '_{}'.format(ind))
-            plt.savefig(os.path.join(self.model_save_path, title+'.png'))
+            plt.savefig(os.path.join(self.model_save_path, title+'_{}.png'.format(ind)))
+            plt.close()
+        print('test MSE loss %.2e'%(np.average(test_losses)))
         return test_losses
 
         #log save
@@ -273,8 +311,7 @@ class Trainer():
 
     def lr_decay(self):
         current_ep = len(self.loss_list)
-        testmode = self.testmode
-        if current_ep > 3*self.save_every or testmode:
+        if current_ep > self.lrdecay_every + self.last_lrdecay or self.testmode:
             window = int(self.save_every/2)
             before_average = np.average(self.loss_list[current_ep -1 - self.save_every:
                                         current_ep -1 - self.save_every + window])
@@ -282,11 +319,18 @@ class Trainer():
             diff = np.abs(recent_loss - before_average)/before_average
             more_change = diff > self.lrdecay_thres
 
-            if sum(more_change) ==0:#no change
-                for param_group in self.optimizer.param_groups:
-                    param_group['lr'] /= 1.58 #pow(10,0.333)
-                    print('lr decayed')
-                    self.update_log('lr decayed to {}'.format(param_group['lr']))
+            if sum(more_change) ==0 or self.testmode:#no change
+                self.learning_rates /= 3
+                if type(self.optimizer) == type(torch.optim.Adam(self.model.parameters(), lr = 0.001)):
+                    self.optimizer = torch.optim.Adam(self.model.parameters(), lr = self.learning_rates)
+                elif type(self.optimizer) == type(torch.optim.RMSprop(self.model.parameters(), lr = self.learning_rates)):
+                    self.optimizer = torch.optim.RMSprop(self.model.parameters(), lr = self.learning_rates)
+                # for param_group in self.optimizer.param_groups:
+                #     param_group['lr'] /= 1.58 #pow(10,0.333)
+
+                self.last_lrdecay = current_ep
+                print('lr decayed')
+                self.update_log('lr decayed to %.2e'%(self.learning_rates))
                 return True
             else:return False
         else:return False

@@ -105,12 +105,17 @@ class CoordRandomRotate:
 
         W1, H1 = image.size
 
-        image = image.rotate(angle, expand = self.expand)
+
         if self.expand:
             W2, H2 = image.size
             label = rotate_label(label, angle, H = H1, W = W1, new_centerXY=(W2 / 2, H2 / 2))
+            image = image.rotate(angle, expand=True)
         else:
-            label = rotate_label(label, angle, H = H1, W = W1)
+            r_label = rotate_label(label, angle, H = H1, W = W1)
+            if not is_outlier(label, H1, W1, margin = 1):
+                label = r_label
+                image = image.rotate(angle, expand=False)
+
         return image, label
 
 class CoordRandomRotate:
@@ -209,56 +214,13 @@ class CoordLabelNormalize:
         r_label = r_label.reshape(-1)
         return image, r_label
 
-# def transform_test():
-#     data_path = './highres_images'
-#     label_path = './resized_labels'
-#     save_path = './model'
-#     is_segment = True
-#
-#     ##Get DataLoader
-#     # get label and dataname list
-#     data_names = read_data_names(label_path)
-#
-#
-#
-#     N_all = len(data_names)
-#     # get train and validation data set
-#     data_names_train = data_names
-#     coords_train = coords_rel
-#
-#     dset_original = SpineDataset(data_path, label_path, data_names_train, coords_rel=coords_train, transform=transform
-#                                  , is_segment=is_segment)
-#     loader_original = DataLoader(dataset=dset_original, batch_size=4, shuffle=False)
-#     #######Displaying the training data
-#
-#     toPIL = tr.ToPILImage()
-#     toT = tr.ToTensor()
-#
-#
-#     for val_data in loader_original:
-#         imgs = val_data['image'].cpu().to(dtype=torch.float)
-#         labels = val_data['label'].cpu().to(dtype=torch.float)
-#
-#
-#         for ind, img in enumerate(imgs):#img is tensor
-#             plt.figure()
-#             img = np.asarray(img).reshape(512,256) #go to original image data : nparray (->PILimage)
-#             t_img = img#transform(img)
-#             # t_img = toPIL(img)
-#             # t_img = TF.rotate(t_img, 15)
-#             # t_img = toT(t_img)
-#
-#             #img = np.repeat(img.reshape(512,256,1), 3, axis = 2)
-#             t_img = np.repeat(t_img.reshape(512, 256, 1), 3, axis=2)
-#
-#             plt.subplot(121)
-#             plot_image(img)
-#             plt.title('orig_{}'.format(ind))
-#
-#             plt.subplot(122)
-#             plt.imshow(t_img)
-#             plt.title('trans_{}'.format(ind))
-#         plt.show()
+class CoordJitter:
+    def __init__(self, brightness=0, contrast=0, saturation=0, hue=0):
+        self.jitter = tr.ColorJitter(brightness=brightness, contrast=contrast, saturation=saturation, hue=hue)
+
+    def __call__(self, image, label):
+        r_image = self.jitter(image)
+        return r_image, label
 
 def rotate_label(label, degree, H, W, new_centerXY=None):
 
@@ -292,39 +254,59 @@ def check_dataset(loader):
             plot_image(image=img, coord=lab)
         plt.show()
 
-def outlier_check(label, H, W, margin):
+def is_outlier(label, H, W, margin=0):
     label_r = label.reshape(-1,2)
+    label_r[:,0] *= W
+    label_r[:,1] *= H
 
-    L = label[:,0] <0 + margin
-    R = label[:,0] >W -margin
-    U = label[:,1] <0 +margin
-    D = label[:,1] >H -margin
+    L = label_r[:,0] <0 + margin
+    R = label_r[:,0] >W -margin
+    U = label_r[:,1] <0 +margin
+    D = label_r[:,1] >H -margin
     crit = np.sum(L) + np.sum(R) + np.sum(U) + np.sum(D)
     if crit ==0:
         return False
     else:
         return True
 
-if __name__ == '__main__':
-
-    #def label-to-image
-    data_path = './highres_images'
-    label_path = './highres_labels'
-    labels = read_labels(location = label_path)
-    data_names = read_data_names(location = label_path)
-
-    batch_size = 8
-
+#if __name__ == '__main__':
+    # #def label-to-image
+    # data_path = './highres_images'
+    # label_path = './highres_labels'
+    #
+    # labels = read_labels(location = label_path)
+    # data_names = read_data_names(location = label_path)
+    #
+    # batch_size = 8
+    #
+    # customTransforms = [
+    #         CoordJitter(brightness=0, contrast=0, saturation=0, hue=0)
+    #         CoordCustomPad(512 / 256),
+    #         CoordResize((512, 256)),
+    #         CoordLabelNormalize()
+    #     ]
+    #
+    #     dset = CoordDataset(data_path, labels, data_names, transform_list=customTransforms)
+    #     loader_transform = DataLoader(dataset=dset, batch_size=1, shuffle=False)
+    #     index = 0
+    #     for val_data in loader_original:
+    #         img = val_data['image'].cpu().to(dtype=torch.float)[0]  # for batch size 1
+    #         lab = val_data['label'].cpu().to(dtype=torch.float)[0]
+    #         img = img.numpy()
+    #         lab = lab.numpy()
+    #         C, H, W = img.shape
+    #
+    #         if is_outlier(lab, H=H, W=W, margin=1):
+    #             if index not in outliers_count.keys():
+    #                 outliers_count[index] = []
+    #             outliers_count[index].append((img, lab, angle))
+    #         index += 1
+    #
     # transform = tr.Compose([
     #     tr.RandomRotation(30, expand = False)
     #     tr.ToTensor()
     # ])
 
-    customTransforms = [
-    CoordCustomPad(512 / 256),
-    CoordResize((512, 256)),
-    CoordLabelNormalize()
-    ]
 
     # customTransforms = [
     #                     CoordRandomRotate(max_angle = 5, expand = True, is_random =False),
@@ -350,26 +332,43 @@ if __name__ == '__main__':
     #     plt.show()
 
 
-    dset = CoordDataset(data_path, labels, data_names, transform_list=customTransforms)
-    loader_original = DataLoader(dataset=dset, batch_size=batch_size, shuffle=False)
-
-    index = 0
-    for val_data in loader_original:
-        imgs = val_data['image'].cpu().to(dtype=torch.float)
-        labs = val_data['label'].cpu().to(dtype=torch.float)
-        for ind in range(batch_size):
-
-            img = imgs[ind]
-            lab = labs[ind]
-
-
-
-
-        # plt.figure()
-        # for ind in range(batch_size):
-        #     img = imgs[ind]
-        #     lab = labs[ind]
-        #     col_no = int(batch_size/2)
-        #     plt.subplot(201 + 10*col_no+ind)
-        #     plot_image(image = img, coord = lab)
-        # plt.show()
+    # import numpy as np
+    # max_angle = 8
+    #
+    # angles = np.arange(-max_angle, max_angle+0.1, 0.5)
+    #
+    # outliers_count = {}
+    # for angle in angles:
+    #     print('processing angle {}'.format(angle))
+    #     customTransforms = [
+    #         CoordRandomRotate(angle, expand=False, is_random=False),
+    #         CoordCustomPad(512 / 256),
+    #         CoordResize((512, 256)),
+    #         CoordLabelNormalize()
+    #     ]
+    #
+    #     dset = CoordDataset(data_path, labels, data_names, transform_list=customTransforms)
+    #     loader_original = DataLoader(dataset=dset, batch_size=1, shuffle=False)
+    #     index = 0
+    #     for val_data in loader_original:
+    #         img = val_data['image'].cpu().to(dtype=torch.float)[0]  # for batch size 1
+    #         lab = val_data['label'].cpu().to(dtype=torch.float)[0]
+    #         img = img.numpy()
+    #         lab = lab.numpy()
+    #         C, H, W = img.shape
+    #
+    #         if is_outlier(lab, H=H, W=W, margin=1):
+    #             if index not in outliers_count.keys():
+    #                 outliers_count[index] = []
+    #             outliers_count[index].append((img, lab, angle))
+    #         index += 1
+    #
+    # for ind, out_list in outliers_count.items():
+    #     print('img{}, outliers {}'.format(ind, len(out_list)))
+    #     for img, lab, angle in out_list:
+    #         plt.figure()
+    #         title = 'im_{}_angle_{}'.format(ind, angle)
+    #         plt.title(title)
+    #         plot_image(img, coord=lab)
+    #         plt.savefig(os.path.join('./plots', title + '.png'))
+    #         plt.close()

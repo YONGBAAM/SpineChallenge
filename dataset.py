@@ -12,7 +12,7 @@ from helpers import read_labels, read_data_names
 # #https://pytorch.org/tutorials/beginner/data_loading_tutorial.html
 
 class CoordDataset(Dataset):
-    def __init__(self, data_location, coords, data_names, transform_list = None):
+    def __init__(self, data_location, coords, data_names, transform_list = None, no_normalize = False):
         super(CoordDataset).__init__()
         self.data_location = data_location
         self.labels = coords
@@ -22,6 +22,7 @@ class CoordDataset(Dataset):
         self.toTensor = transforms.ToTensor()
         self.nor = transforms.Normalize((0.5,), (0.5,))
         self.toImage = transforms.ToPILImage()
+        self.no_normalize = no_normalize
 
     def __len__(self):
         return self.size
@@ -36,6 +37,8 @@ class CoordDataset(Dataset):
                 image, label = transform(image, label)
 
         image = self.toTensor(image)
+        if self.no_normalize:
+            image = self.nor(image)
         return {'image' : image, 'label' : label}
 
 

@@ -186,7 +186,7 @@ def get_classifier():
     return classifier
 
 class LandmarkNet(nn.Module):
-    def __init__(self, classifier = None,PoolDrop = False, requires_grad = False):
+    def __init__(self, classifier = None,PoolDrop = True, requires_grad = False):
         super(LandmarkNet, self).__init__()
 
         self.extractor = get_feature_extractor(requires_grad=requires_grad, PoolDrop = PoolDrop)

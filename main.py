@@ -11,37 +11,13 @@ from model import SegmentNet, LandmarkNet, get_classifier, SpinalStructured, get
 from postprocessing import CoordDataset, CoordCustomPad, CoordHorizontalFlip,CoordRandomRotate, CoordLabelNormalize, CoordResize, CoordVerticalFlip
 
 '''
-프로젝트관련 진행사항은 여기다가 적자
-당부 : 메인 두개만들지 말기!! 아래 주석으로
-좌표추정은 버리자. 그냥 한계 명시하기.
-지금 돌려놓은거(spinestructure, dropout)만 쓰기
+이제 끝 손대지말자
 
-나머지 연휴때는 그냥 seg만 주구장창 돌리자.
-Seg는 좌표 벗어난거 확인 안해도 됨!!걍해
+후처리구현
 
-landmark를 추정하는게 맞을까?
-ㅇㅇ맞아 더 하지마
++ seg map이랑 해서 앙상블하자 이건 어쩔수없다.
+일단 이것만해서 후처리하기 화요일 올인!
 
-일단 랜드마크가지고 하고 후처리를 하던가 하기
-
-후처리할거면 걍 세그멘테이션으로 하는게 낫지않나?
-
-일단 오늘 4개 돌려놓은거 결과확인하고 로테이션 손보고
-그다음 마지막거 4000 + dropout + aug 해서 트레이닝!!
-이거랑 세그멘테이션도 완전트레이닝 둘다!!
-
-
-로테노 로테손본거 세그 3개 트레이닝 완전
-세그는 로테 손안봐도됨 걍 잘라
-돌려놓고 손 떼!!!!!!!!!!!!!!!!!
-
-모델 토치모델 디드라이브로 변경
-
-
-
-
-\
-\
 '''
 
 
@@ -60,14 +36,10 @@ landmark를 추정하는게 맞을까?
 ##      Parameters                                ##
 ####################################################
 
-
-
-RESET_PERM = False
 data_path = './highres_images'
 label_path = './highres_labels'
-save_path = './model'
 
-val_ratio = 0.05
+val_ratio = 0.0
 batch_size = 64
 
 labels = read_labels(label_path)
@@ -93,7 +65,8 @@ data_names_val = []
 labels_train = []
 labels_val = []
 
-if not os.path.exists(os.path.join('./', 'val_permutation.npy')) or RESET_PERM:
+if not os.path.exists(os.path.join('./', 'val_permutation.npy')):
+    print('reset permutation')
     permutation = np.random.permutation(N_all)
     np.save(os.path.join('./', 'val_permutation.npy'), permutation)
 else:
@@ -109,71 +82,75 @@ for ind in permutation[N_train:]:
     labels_val.append(labels[ind])
 labels_val = np.asarray(labels_val)
 
-customTransforms = [
-#                       CoordRandomRotate(max_angle = 5, expand = True),
+RHV = [
+                       CoordRandomRotate(max_angle = 10, expand = False),
                         CoordHorizontalFlip(0.5),
-#                        CoordVerticalFlip(0.5),
+                        CoordVerticalFlip(0.5),
                         CoordCustomPad(512 /256),
                         CoordResize((512,256)),
                         CoordLabelNormalize()
                        ]
 
-dset_train = CoordDataset(data_path, labels_train, data_names_train, transform_list=customTransforms)
-dset_val = CoordDataset(data_path, labels_val, data_names_val, transform_list= [
-    CoordCustomPad(512 / 256),
-    CoordResize((512, 256)),
-    CoordLabelNormalize()
-])
+RH = [
+                       CoordRandomRotate(max_angle = 10, expand = False),
+                        CoordHorizontalFlip(0.5),
+                        CoordCustomPad(512 /256),
+                        CoordResize((512,256)),
+                        CoordLabelNormalize()
+                       ]
 
-loader_train = DataLoader(dataset = dset_train, batch_size =batch_size, shuffle = True)
-loader_val = DataLoader(dataset = dset_val, batch_size = 4, shuffle = False)
+smooth = torch.nn.SmoothL1Loss()
+MSE = torch.nn.MSELoss()
 
-from postprocessing import check_dataset
-#check_dataset(loader_val)
+for is_lr_decay, name  in [(True,'FINALL_DEC'), (False, 'FINALL_NODEC')]:
+    #고정
+    customTransforms = RH
+    crit = smooth
 
-###Testing the Training data
-# _train_data = next(iter(loader_train))
-# _imgs= _train_data['image']
-# _labels = _train_data['label']
-# _lb = _labels[0]
-# print(np.average(_lb))
+    dset_train = CoordDataset(data_path, labels_train, data_names_train, transform_list=customTransforms)
+    dset_val = CoordDataset(data_path, labels_val, data_names_val, transform_list=[
+        CoordCustomPad(512 / 256),
+        CoordResize((512, 256)),
+        CoordLabelNormalize()
+    ])
 
-###################################
-#TRAINING           ###############
-###################################
-from train import Trainer
+    loader_train = DataLoader(dataset=dset_train, batch_size=batch_size, shuffle=True)
+    loader_val = DataLoader(dataset=dset_val, batch_size=4, shuffle=False)
 
-state_dict = {'testmode' : False, 'no_train' : N_train, 'no_val' : N_val,
-              'num_epochs': 1500, 'learning_rates' : 1e-5,
-              'save_every' : 50, 'all_model_save' : 0.95,
-              'is_lr_decay' : True, 'lrdecay_thres' : 0.1
-              }
+    from postprocessing import check_dataset
+    # check_dataset(loader_val)
 
+    ###Testing the Training data
+    # _train_data = next(iter(loader_train))
+    # _imgs= _train_data['image']
+    # _labels = _train_data['label']
+    # _lb = _labels[0]
+    # print(np.average(_lb))
 
-# for prob in [0.2,0.5]:
-#     classifier = get_classifier_conv(dropout=prob)
-#     model = LandmarkNet(PoolDrop=True, classifier=classifier)
-#     model = model.to(device)
-#     state_dict['model_name'] = 'conv_p{}'.format(prob)
-#     optim = torch.optim.RMSprop(model.parameters(), lr=state_dict['learning_rates'])
-#     crit = torch.nn.MSELoss()
-#     trainer = Trainer(model=model, optimizer=optim, loader_train=loader_train,
-#                       loader_val=loader_val, criterion=crit, **state_dict)
-#     trainer.train()
+    ###################################
+    # TRAINING           ###############
+    ###################################
+    from train import Trainer
 
+    is_lr_decay = is_lr_decay
+    state_dict = dict(num_epochs=2000, learning_rates=1e-5, save_every=100,
+                      all_model_save=0.99,
+                      is_lr_decay=is_lr_decay, lrdecay_thres=0.1, lrdecay_every = 400,
+                      model_save_path="D:\\TorchModels", dropout_prob=0.5
+                      )
 
-name = 'conv_p0.5_from350_ep400_tL3.02e-03_vL1.64e-03.model'
+    state_dict['model_name'] = name
+    #load_name = 'RH_SM_all_ep1999_tL1.45e-03_vL6.31e-04.model'
 
-for prob, sp in [(0.5,False)]:
-    classifier = get_classifier_conv(dropout=prob)
-    model = LandmarkNet(PoolDrop=True, classifier=classifier)
-    model = model.to(device)
-    state_dict['model_name'] = 'conv_p{}_700'.format(prob)
-    optim = torch.optim.Adam(model.parameters(), lr=state_dict['learning_rates'])
-    crit = torch.nn.MSELoss()
-    trainer = Trainer(model=model, optimizer=optim, loader_train=loader_train,
-                      loader_val=loader_val, criterion=crit, **state_dict)
-    trainer.load_model(name)
+    model = LandmarkNet(PoolDrop=True, classifier=get_classifier_conv(dropout=state_dict['dropout_prob'])).to(device)
+    trainer = Trainer(model=model,
+                      optimizer=torch.optim.Adam(model.parameters(), lr=state_dict['learning_rates']),
+                      loader_train=loader_train, loader_val=loader_train, criterion=crit, **state_dict)
+                      #loader_train=loader_train, loader_val=loader_val, criterion=crit, **state_dict)
+                      #loader_train=loader_train, loader_val=loader_val, criterion=torch.nn.MSELoss(), **state_dict)
+
+    #trainer.load_model(title=load_name, all=True)
+    #tl = trainer.test(test_loader=loader_val, title=state_dict['model_name'] + '_init')
 
     trainer.train()
 
@@ -222,4 +199,5 @@ state_dict = {'testmode' : False, 'no_train' : N_train, 'no_val' : N_val,
 #
 #     trainer.load_model('torch_211745_from2000_ep300_tL1.60e-03_vL2.46e-02.model')
 #     trainer.train()
+
 '''
