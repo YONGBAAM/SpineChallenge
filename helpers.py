@@ -85,14 +85,14 @@ def plot_image(image, coord = None, segmap = None, ref_coord = None, ref_segmap 
     #imshow는 scatter 뒤에 해야 함!
 
     if coord is not None:
-        coord = coord.reshape(-1, 2)
+        coord = np.copy(coord.reshape(-1, 2))
         if coord[0][1] <1:
             #Coord는 상대좌표
             coord[:,0] *= W
             coord[:,1] *= H
         plt.scatter(coord[:, 0], coord[:, 1], s=1.2, c='red')
         if ref_coord is not None:
-            ref_coord = ref_coord.reshape(-1, 2)
+            ref_coord = np.copy(ref_coord.reshape(-1, 2))
             if ref_coord[0][1] < 1:
                 # Coord는 상대좌표
                 ref_coord[:, 0] *= W

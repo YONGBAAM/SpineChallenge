@@ -57,7 +57,7 @@ data_path = './highres_images'
 label_path = './highres_labels'
 
 val_ratio = 0.1
-batch_size = 96
+batch_size = 64
 
 
 labels = read_labels(label_path)
@@ -110,14 +110,6 @@ RH = [
 NOPAD = [
                        CoordRandomRotate(max_angle = 10, expand = False),
                         CoordHorizontalFlip(0.5),
-#                        CoordCustomPad(512 /256),
-                        CoordResize((512,256)),
-                        CoordLabelNormalize()
-                       ]
-GAU = [
-                       CoordRandomRotate(max_angle = 10, expand = False),
-                        CoordHorizontalFlip(0.5),
-                        CoordCustomPad(512 /256, random = 'gaussian'),
                         CoordResize((512,256)),
                         CoordLabelNormalize()
                        ]
@@ -128,16 +120,24 @@ UNF = [
                         CoordResize((512,256)),
                         CoordLabelNormalize()
                        ]
-
-######################TRANSFORM 여기선 트랜스폼만
-customTransforms = RH
-#########################
-dset_train = CoordDataset(data_path, labels_train, data_names_train, transform_list=customTransforms)
-dset_val = CoordDataset(data_path, labels_val, data_names_val, transform_list=[
+NOPAD_VAL = [
 #    CoordCustomPad(512 / 256),
     CoordResize((512, 256)),
     CoordLabelNormalize()
-])
+]
+
+PAD_VAL = [
+    CoordCustomPad(512 / 256),
+    CoordResize((512, 256)),
+    CoordLabelNormalize()
+]
+
+######################TRANSFORM 여기선 트랜스폼만
+customTransforms = NOPAD
+val_transforms = NOPAD_VAL
+#########################
+dset_train = CoordDataset(data_path, labels_train, data_names_train, transform_list=customTransforms)
+dset_val = CoordDataset(data_path, labels_val, data_names_val, transform_list=val_transforms)
 
 loader_train = DataLoader(dataset=dset_train, batch_size=batch_size, shuffle=True)
 loader_val = DataLoader(dataset=dset_val, batch_size=4, shuffle=False)
@@ -146,156 +146,23 @@ loader_val = DataLoader(dataset=dset_val, batch_size=4, shuffle=False)
 # TRAINING           ##############
 ###################################
 from train import Trainer
-state_dict = dict(num_epochs=500, learning_rates=1e-5, save_every=25,
+state_dict = dict(num_epochs=2000, learning_rates=1e-5, save_every=50,
                   all_model_save=0.99,
-                  is_lr_decay=False, lrdecay_thres=0.1, lrdecay_every=200,
-                  model_save_path="D:\\TorchModels", dropout_prob=0.5
+                  is_lr_decay=True, lrdecay_thres=0.1, lrdecay_every=500,
+                  model_save_path="./model", dropout_prob=0.5
                   )
-state_dict['model_name'] = 'NOPAD'
+state_dict['model_name'] = 'NOPAD_DEEP'
+classifier = get_classifier_deep(dropout=state_dict['dropout_prob'])
 
-# load_name = 'RH_SM_all_ep1999_tL1.45e-03_vL6.31e-04.model'
-classifier = get_classifier_conv(dropout=state_dict['dropout_prob'])
-#classifier = get_classifier_deep(dropout=state_dict['dropout_prob'])
 model = LandmarkNet(PoolDrop=True, classifier=classifier).to(device)
 trainer = Trainer(model=model,
                   optimizer=torch.optim.Adam(model.parameters(), lr=state_dict['learning_rates']),
 #                  loader_train=loader_train, loader_val=loader_train, criterion=nn.SmoothL1Loss(), **state_dict)
                     loader_train = loader_train, loader_val = loader_val, criterion = nn.SmoothL1Loss(), ** state_dict)
 # loader_train=loader_train, loader_val=loader_val, criterion=torch.nn.MSELoss(), **state_dict)
-
-# trainer.load_model(title=load_name, all=True)
 # tl = trainer.test(test_loader=loader_val, title=state_dict['model_name'] + '_init')
+#trainer.test(test_loader=loader_val, load_model_name='RH_SM_all_ep500_tL4.09e-03_vL1.10e-03.model')
 trainer.train()
 
 
-#####
-#
-#
-#
-######
 
-######################TRANSFORM 여기선 트랜스폼만
-customTransforms = UNF
-#########################
-dset_train = CoordDataset(data_path, labels_train, data_names_train, transform_list=customTransforms)
-dset_val = CoordDataset(data_path, labels_val, data_names_val, transform_list=[
-    CoordCustomPad(512 / 256),
-    CoordResize((512, 256)),
-    CoordLabelNormalize()
-])
-
-loader_train = DataLoader(dataset=dset_train, batch_size=batch_size, shuffle=True)
-loader_val = DataLoader(dataset=dset_val, batch_size=4, shuffle=False)
-
-###################################
-# TRAINING           ##############
-###################################
-from train import Trainer
-state_dict = dict(num_epochs=500, learning_rates=1e-5, save_every=25,
-                  all_model_save=0.99,
-                  is_lr_decay=False, lrdecay_thres=0.1, lrdecay_every=200,
-                  model_save_path="D:\\TorchModels", dropout_prob=0.5
-                  )
-state_dict['model_name'] = 'UNF'
-
-# load_name = 'RH_SM_all_ep1999_tL1.45e-03_vL6.31e-04.model'
-
-model = LandmarkNet(PoolDrop=True, classifier=get_classifier_conv(dropout=state_dict['dropout_prob'])).to(device)
-trainer = Trainer(model=model,
-                  optimizer=torch.optim.Adam(model.parameters(), lr=state_dict['learning_rates']),
-#                  loader_train=loader_train, loader_val=loader_train, criterion=nn.SmoothL1Loss(), **state_dict)
-                 loader_train=loader_train, loader_val=loader_val, criterion=nn.SmoothL1Loss(), **state_dict)
-# loader_train=loader_train, loader_val=loader_val, criterion=torch.nn.MSELoss(), **state_dict)
-
-# trainer.load_model(title=load_name, all=True)
-# tl = trainer.test(test_loader=loader_val, title=state_dict['model_name'] + '_init')
-trainer.train()
-
-#####
-#
-#
-#
-######
-
-######################TRANSFORM 여기선 트랜스폼만
-customTransforms = GAU
-#########################
-dset_train = CoordDataset(data_path, labels_train, data_names_train, transform_list=customTransforms)
-dset_val = CoordDataset(data_path, labels_val, data_names_val, transform_list=[
-    CoordCustomPad(512 / 256),
-    CoordResize((512, 256)),
-    CoordLabelNormalize()
-])
-
-loader_train = DataLoader(dataset=dset_train, batch_size=batch_size, shuffle=True)
-loader_val = DataLoader(dataset=dset_val, batch_size=4, shuffle=False)
-
-###################################
-# TRAINING           ##############
-###################################
-from train import Trainer
-state_dict = dict(num_epochs=500, learning_rates=1e-5, save_every=25,
-                  all_model_save=0.99,
-                  is_lr_decay=False, lrdecay_thres=0.1, lrdecay_every=200,
-                  model_save_path="D:\\TorchModels", dropout_prob=0.5
-                  )
-state_dict['model_name'] = 'GAU'
-
-# load_name = 'RH_SM_all_ep1999_tL1.45e-03_vL6.31e-04.model'
-
-model = LandmarkNet(PoolDrop=True, classifier=get_classifier_conv(dropout=state_dict['dropout_prob'])).to(device)
-trainer = Trainer(model=model,
-                  optimizer=torch.optim.Adam(model.parameters(), lr=state_dict['learning_rates']),
-#                  loader_train=loader_train, loader_val=loader_train, criterion=nn.SmoothL1Loss(), **state_dict)
-                 loader_train=loader_train, loader_val=loader_val, criterion=nn.SmoothL1Loss(), **state_dict)
-# loader_train=loader_train, loader_val=loader_val, criterion=torch.nn.MSELoss(), **state_dict)
-
-# trainer.load_model(title=load_name, all=True)
-# tl = trainer.test(test_loader=loader_val, title=state_dict['model_name'] + '_init')
-trainer.train()
-'''
-#########################################33
-#
-#       Upper : Linear
-#       For double training
-#       Lower : Segment
-#
-#############################################RESET_PERM = False
-is_segment = True
-batch_size = 8
-coords_rel = read_labels(label_path)
-
-#나중에 달라질수도 있으므로
-transform = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize((0.5,), (0.5,)),
-])
-
-dset_train.is_segment = is_segment
-loader_train = DataLoader(dataset = dset_train, batch_size =batch_size, shuffle = True)
-
-dset_val.is_segment = is_segment
-loader_val = DataLoader(dataset = dset_val, batch_size = batch_size, shuffle = False)
-
-###################################
-#TRAINING           ###############
-###################################
-state_dict = {'testmode' : False, 'no_train' : N_train, 'no_val' : N_val,
-              'num_epochs': 2000, 'learning_rates' : 0.0003,
-              'save_every' : 50, 'all_model_save' : 0.95,
-              'is_lr_decay' : True
-              }
-
-# for lr in [3e-4]:
-#     model = SegmentNet().to(device)
-#     state_dict['model_name'] = '211745_from2300'
-#     state_dict['learning_rates'] = lr
-#     optim = torch.optim.Adam(model.parameters(), lr=state_dict['learning_rates'])
-#     crit = torch.nn.MSELoss()
-#     trainer = Trainer(model=model, optimizer=optim, loader_train=loader_train,
-#                       loader_val=loader_val, criterion=crit, **state_dict)
-#
-#     trainer.load_model('torch_211745_from2000_ep300_tL1.60e-03_vL2.46e-02.model')
-#     trainer.train()
-
-'''

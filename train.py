@@ -11,6 +11,7 @@ from dataset import SpineDataset
 import torchvision.transforms as transforms
 from model import get_feature_extractor
 import datetime
+from helpers import write_labels
 
 from collections.abc import Iterable
 
@@ -178,7 +179,6 @@ class Trainer():
             print('loading {}'.format(model_load_path))
             self.model.load_state_dict(torch.load(model_load_path))
 
-
     def save_config(self, title):
         #save the parameters of training
         #lr, adam/sgd...
@@ -240,17 +240,40 @@ class Trainer():
 
         return val_losses
 
-    def test(self, test_path = None, test_loader = None, title = None, load_model_name = None):
-        #plot and save image all
+    def test(self, test_path = None, test_loader = None, load_model_name = None, title = None):
 
+        ##Getting save path and model load
         if load_model_name is not None:
-            self.load_model(load_model_name, all = True)
-            print('Loading {}'.format(load_model_name))
+            if os.path.exists(os.path.join(self.model_save_path, load_model_name)):
+                #current path, load model
+                model_load_path = os.path.join(self.model_save_path, load_model_name)
+                print('loading {}'.format(model_load_path))
+                result_save_path = self.model_save_path
+                self.model.load_state_dict(torch.load(os.path.join(self.model_save_path, load_model_name)))
+            else:#new path, load model
+                up_path = self.model_save_path.split('\\')
+                up_path = '/'.join(up_path[:-1])
+                folder = load_model_name.split('ep')[0]
+                folder = folder[:-1]
+                ep_no = load_model_name.split('ep')[1].split('_')[0]
+                model_load_path = os.path.join(up_path, folder, load_model_name)
+                print('loading {}'.format(model_load_path))
+                result_save_path = up_path + '/' + folder + '_ep' + ep_no
+                self.model.load_state_dict(torch.load(model_load_path))
+        else:
+            #no load, existing model
+            result_save_path = self.model_save_path
+        if not os.path.exists(result_save_path):
+            os.makedirs(result_save_path)
+        print('save result in {}'.format(result_save_path))
+
 
         if test_loader == None:
             #make testloader
             #val로 하고싶으면 loader 주면 된다!!!!!
             print('not implemented yet :D')
+
+
 
         test_crit = nn.MSELoss()
 
@@ -267,6 +290,8 @@ class Trainer():
             loss = test_crit(out, labels)
             test_losses.append(loss.item())
 
+            _,_,H,W = imgs.shape
+
             # for save validation
             test_labels.append(np.asarray(out.cpu().detach()))
             img_list.append(np.asarray(imgs.cpu().detach()))
@@ -277,8 +302,9 @@ class Trainer():
         true_labels = np.concatenate(true_labels, axis=0)
 
         if title is None:
-            title = self.model_name + '_test'
+            title = folder + '_ep' + ep_no + '_t'
 
+        #save image result for test
         for ind in range(imgs.shape[0]):
             plt.figure()
             if self.is_landmark == True:
@@ -286,8 +312,17 @@ class Trainer():
             elif self.is_landmark == False:
                 plot_image(imgs[ind], segmap=test_labels[ind], ref_segmap=true_labels[ind])
             plt.title(title + '_{}'.format(ind))
-            plt.savefig(os.path.join(self.model_save_path, title+'_{}.png'.format(ind)))
+            plt.savefig(os.path.join(result_save_path, title + '_{}.jpg'.format(ind)))
             plt.close()
+
+        #save absolute label result
+        N = test_labels.shape[0]
+        labels_abs = test_labels.reshape(N,-1,2)
+        labels_abs[:,:,0] *= W
+        labels_abs[:,:,1] *= H
+        labels_abs = labels_abs.reshape(N,-1)
+        write_labels(labels_abs, result_save_path)
+
         print('test MSE loss %.2e'%(np.average(test_losses)))
         return test_losses
 

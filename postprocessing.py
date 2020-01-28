@@ -6,7 +6,7 @@ from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as tr
 from helpers import read_data_names, read_labels, plot_image, chw, hwc
 from dataset import SpineDataset, CoordDataset
-from model import SegmentNet, LandmarkNet, get_classifier, SpinalStructured
+from model import SegmentNet, LandmarkNet, SpinalStructured
 import torchvision.transforms.functional as TF
 import matplotlib.pyplot as plt
 from math import sqrt
