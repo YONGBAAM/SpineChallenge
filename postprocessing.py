@@ -1,20 +1,10 @@
 import numpy as np
 import os
-import torch
-import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
-import torchvision.transforms as tr
-from helpers import read_data_names, read_labels, plot_image, chw, hwc
-from dataset import SpineDataset, CoordDataset
-from model import SegmentNet, LandmarkNet, SpinalStructured
-import torchvision.transforms.functional as TF
+from label_io import read_data_names, read_labels, chw, hwc, write_labels
 import matplotlib.pyplot as plt
-from math import sqrt
-import torch
-import math
-import sys
-import random
-from PIL import Image
+import pandas as pd
+from label_io import to_absolute, to_relative, plot_image
+from calc import calc_angle, _get_angle
 try:
     import accimage
 except ImportError:
@@ -25,363 +15,305 @@ import types
 import collections
 import warnings
 
-if sys.version_info < (3, 3):
-    Sequence = collections.Sequence
-    Iterable = collections.Iterable
-else:
-    Sequence = collections.abc.Sequence
-    Iterable = collections.abc.Iterable
-
-    _pil_interpolation_to_str = {
-        Image.NEAREST: 'PIL.Image.NEAREST',
-        Image.BILINEAR: 'PIL.Image.BILINEAR',
-        Image.BICUBIC: 'PIL.Image.BICUBIC',
-        Image.LANCZOS: 'PIL.Image.LANCZOS',
-        Image.HAMMING: 'PIL.Image.HAMMING',
-        Image.BOX: 'PIL.Image.BOX',
-    }
-
-##################################
+#############################################
 #
-#   Define custom transform
-#   현재 좌표모드만 제작완료
-#   이름 다르게해서 헷갈리지 않게 하기
-#    모두 PIL image 라 생각하고!
-#   사실 torchvision transform도
-#   PIL 이미지에서 작업함!
+#   잘못됬음!! label가지고 각도 구할때는 원본이미지 스케일에서 해야 함!
+#   테스트 이미지 이터레이터 구현
+#   이제 노패드니까 프레딕트도 relative label로 걍 두기
 #
-#################################
+#
+#   정리는 더 안해도 된다.
+###############################################
 
 
+def label_sort(labels):
+    #1st axis : 증가하는 axis가 0임 즉 column별로
+    labels_rev = np.copy(labels.reshape(-1,34,2,2))
 
+    label_list = []
+    for label in labels_rev:
+        left = label[:,0,:]
+        left = [c for c in left]
+        right = label[:,1,:]
+        right = [c for c in right]
+        left = sorted(left, key = lambda x:x[1])
+        right = sorted(right, key = lambda x:x[1])
+        left = np.array(left)
+        right = np.array(right)
+        label_list.append(np.concatenate([left, right], axis = 1))
+    labels_rev = np.array(label_list)
+    labels_rev = labels_rev.reshape(-1,136)
+    return labels_rev
 
-class CoordCustomPad:
-    def __init__(self, HoverW, fixH=True, random = False):
-        self.ratio = HoverW
-        self.fixH = fixH
-        self.fixW = not fixH
-        self.random_mode = random
+def calc_poli(x, coeffs):
+    res = np.zeros_like(x)
+    for coeff in coeffs:
+        res *= x
+        res += coeff
+    return res
 
-    def __call__(self, image, label):
-        W, H = image.size
-
-        desire_W = int(H / self.ratio)
-
-        if self.random_mode == False:
-            left_pad = int((desire_W - W) / 2)
-        elif self.random_mode == 'gaussian':
-            mean_pad = (desire_W -W)/2
-            sd = (desire_W -W)/4
-            left_pad = int(np.random.normal(mean_pad, sd))
-            left_pad = np.clip(left_pad, 0, desire_W-W)
-
-        elif self.random_mode == 'uniform':
-            left_pad = int(np.random.uniform(0,desire_W-W))
-
-
-        right_pad = desire_W - W - left_pad
-        im_pad = TF.pad(image, padding=(left_pad, 0, right_pad, 0), padding_mode='constant')
-
-        label = label.reshape(-1,2)
-        r_label = np.zeros_like(label)
-        r_label[:,1] = label[:,1]
-        r_label[:,0] = label[:,0] + left_pad
-
-        return im_pad, r_label
-
-class SegCustomPad:
-    def __init__(self, HoverW, fixH=True):
-        self.ratio = HoverW
-        self.fixH = fixH
-        self.fixW = not fixH
-
-    def __call__(self, image, segmap):
-        W, H = image.size
-
-        desire_W = int(H / self.ratio)
-        left_pad = int((desire_W - W) / 2)
-        right_pad = desire_W - W - left_pad
-        im_pad = TF.pad(image, padding=(left_pad, 0, right_pad, 0), padding_mode='constant')
-        seg_pad = TF.pad(image, padding=(left_pad, 0, right_pad, 0), padding_mode='constant')
-        return im_pad, seg_pad
-
-class CoordRandomRotate:
-    def __init__(self,max_angle, expand = False, is_random = True):
-        self.max_angle = max_angle
-        self.expand = expand
-        self.is_random = is_random
-    def __call__(self, image, label):
-        if self.is_random:
-            angle = np.random.uniform(-self.max_angle, self.max_angle)
-        else:
-            angle = self.max_angle
-
-        W1, H1 = image.size
-
-
-        if self.expand:
-            W2, H2 = image.size
-            label = rotate_label(label, angle, H = H1, W = W1, new_centerXY=(W2 / 2, H2 / 2))
-            image = image.rotate(angle, expand=True)
-        else:
-            r_label = rotate_label(label, angle, H = H1, W = W1)
-            if not is_outlier(label, H1, W1, margin = 1):
-                label = r_label
-                image = image.rotate(angle, expand=False)
-
-        return image, label
-
-class CoordRandomRotate:
-    def __init__(self,max_angle, expand = False, is_random = True):
-        self.max_angle = max_angle
-        self.expand = expand
-        self.is_random = is_random
-    def __call__(self, image, label):
-        if self.is_random:
-            angle = np.random.uniform(-self.max_angle, self.max_angle)
-        else:
-            angle = self.max_angle
-
-        W1, H1 = image.size
-
-        image = image.rotate(angle, expand = self.expand)
-        if self.expand:
-            W2, H2 = image.size
-            label = rotate_label(label, angle, H = H1, W = W1, new_centerXY=(W2 / 2, H2 / 2))
-        else:
-            label = rotate_label(label, angle, H = H1, W = W1)
-        return image, label
-
-class CoordVerticalFlip:
-    def __init__(self, prob = 0.5):
-        self.prob = prob
-
-    def __call__(self, image, label):
-        W,H = image.size
-
-        if np.random.random() < self.prob:
-            r_img = TF.vflip(image)
-            label = label.reshape(-1, 2)
-            r_label = np.zeros_like(label)
-            r_label[:, 0] = label[:, 0]
-            r_label[:, 1] = H - 1 - label[:, 1]
-            r_label = r_label.reshape(-1)
-            return r_img, r_label
-        else:
-            return image, label
-class CoordHorizontalFlip:
-    def __init__(self, prob=0.5):
-        self.prob = prob
-
-    def __call__(self, image, label):
-        W, H = image.size
-
-        if np.random.random() < self.prob:
-            r_img = TF.hflip(image)
-            label = label.reshape(-1, 2)
-            r_label = np.zeros_like(label)
-            r_label[:,1] = label[:,1]
-            r_label[:, 0] = W - 1 - label[:, 0]
-            r_label = r_label.reshape(-1)
-            return r_img, r_label
-        else:
-            return image, label
-
-class CoordResize:
-    def __init__(self, size, interpolation=Image.BILINEAR):
-        assert (isinstance(size, Iterable) and len(size) == 2)
-        self.size = size
-        self.interpolation = interpolation
-
-    def __call__(self, image, label):
-        """
-        Args:
-            image (PIL Image): Image to be scaled.
-
-        Returns:
-            PIL Image: Rescaled image.
-        """
-        W_ori, H_ori = image.size
-        H_target, W_target = self.size[0], self.size[1]
-        r_image = TF.resize(image, self.size, self.interpolation)
-        label = label.reshape(-1,2)
-        r_label = np.zeros_like(label)
-        r_label[:, 0] = label[:,0]*W_target / W_ori
-        r_label[:, 1] = label[:,1]*H_target / H_ori
-        r_label = r_label.reshape(-1)
-        return r_image, r_label
-
-    def __repr__(self):
-        interpolate_str = _pil_interpolation_to_str[self.interpolation]
-        return self.__class__.__name__ + '(size={0}, interpolation={1})'.format(self.size, interpolate_str)
-
-class CoordLabelNormalize:
-    def __init__(self):
-        pass
-
-    def __call__(self, image, label):
-        W,H = image.size
-        r_label = label.reshape(-1,2)
-        r_label[:,0] /= W
-        r_label[:,1] /= H
-        r_label = r_label.reshape(-1)
-        return image, r_label
-
-class CoordJitter:
-    def __init__(self, brightness=0, contrast=0, saturation=0, hue=0):
-        self.jitter = tr.ColorJitter(brightness=brightness, contrast=contrast, saturation=saturation, hue=hue)
-
-    def __call__(self, image, label):
-        r_image = self.jitter(image)
-        return r_image, label
-
-def rotate_label(label, degree, H, W, new_centerXY=None):
-
-    theta = degree / 180 * np.pi
-    s = np.sin(-theta)  # x y 축 바뀜
-    c = np.cos(-theta)
-    rot_matrix = [[c, s], [-s, c]]  # 회전행렬 transpose
-
-    label = label.reshape(-1, 2)
-    origin = np.asarray([W / 2, H / 2])  # x y좌표
-    label = label - origin
-    label = np.dot(label, rot_matrix)
-    if new_centerXY is None:
-        new_centerXY = origin
-    label += new_centerXY
-    label = label.reshape(-1)
-    return label
-
-def check_dataset(loader):
-    index = 0
-    for val_data in loader:
-        imgs = val_data['image'].cpu().to(dtype=torch.float)
-        labs = val_data['label'].cpu().to(dtype=torch.float)
-
-        plt.figure()
-        for ind in range(4):
-            img = imgs[ind]
-            lab = labs[ind]
-            col_no = 2
-            plt.subplot(201 + 10 * col_no + ind)
-            plot_image(image=img, coord=lab)
-        plt.show()
-
-def is_outlier(label, H, W, margin=0):
-    label_r = label.reshape(-1,2)
-    label_r[:,0] *= W
-    label_r[:,1] *= H
-
-    L = label_r[:,0] <0 + margin
-    R = label_r[:,0] >W -margin
-    U = label_r[:,1] <0 +margin
-    D = label_r[:,1] >H -margin
-    crit = np.sum(L) + np.sum(R) + np.sum(U) + np.sum(D)
-    if crit ==0:
-        return False
+def label_fit(label,degree, full = False):
+    label = label.reshape(-1,2)
+    coeff = np.polyfit(x=label[:, 1], y=label[:, 0], deg=degree)
+    out_xaxis = calc_poli(label[:,1], coeff)
+    out_label = np.concatenate((out_xaxis.reshape(-1,1), label[:,1].reshape(-1,1)), axis = 1)
+    out_label = out_label.reshape(-1)
+    if full:
+        return out_label, coeff
     else:
-        return True
+        return out_label
 
-#if __name__ == '__main__':
-    # #def label-to-image
-    # data_path = './highres_images'
-    # label_path = './highres_labels'
+def derivative_poli(coeff):
+    if len(coeff) ==1:
+        return [0]
+    else:
+        N = len(coeff)
+        der = []
+        degree = N-1
+        for ind in range(N-1):
+            dc = degree * coeff[ind]
+            der.append(dc)
+            degree -=1
+    return der
+
+def post_way1(pred_path, loader_test):
+    #pred_path = './model/RH_SM_all_ep1999'
+    preds = label_sort(read_labels(location = pred_path))
+
+    #all processing is relative
+    #preds = to_relative(preds)
+
+    fit_degree = 6
+
+    ind = -1
+    processing_log = []
+    for val_data in loader_test:
+        imgs = val_data['image'].cpu().numpy()  # for batch size 1
+        gts = val_data['label'].cpu().numpy()
+        for i, img in enumerate(imgs):
+            ind += 1
+            gt = gts[i]
+            H, W = 512, 256
+
+            pred = preds[ind]
+            pred = pred.reshape(34, 2, 2)
+
+            ########################################################
+            #
+            #   Left fit과 right fit 만들고 왼쪽 오른쪽 각각에 대해
+            #   landmark 구하기
+            #   해당 랜드마크 가지고 angle prediction
+            #
+            #
+            #
+            #
+            ########################################################
+
+            left = pred[:, 0, :].reshape(-1, 2)
+            left_fit, coeff_l = label_fit(left, fit_degree, full=True)
+
+            right = pred[:, 1, :].reshape(-1, 2)
+            right_fit, coeff_r = label_fit(right, fit_degree, full=True)
+
+            fitted_pred = np.concatenate((left_fit.reshape(-1, 1, 2), right_fit.reshape(-1, 1, 2))
+                                         , axis=1)
+            fitted_pred = fitted_pred.flatten()
+            pred = pred.flatten()
+
+            angles_g, pos_g, _, mid_lines_g, _ = calc_angle(gt, (1, 1))
+            angles_p, pos_p, _, mid_lines_p, _ = calc_angle(fitted_pred, (1, 1))
+
+            angles_g = angles_g[0]
+            angles_p = angles_p[0]
+
+            angle_err = np.abs(angles_g - angles_p) / angles_g
+
+            pos_g = pos_g[0:2]
+            pos_p = pos_p[0:2]
+
+            # right = np.tile(lab[:,1,:].expand_dims(1), (1,2,1))
+            C, H, W = img.shape
+            plt.figure()
+
+            for pos in pos_g:
+                plt.plot(mid_lines_g[2 * pos:2 * pos + 2, 0] * W, mid_lines_g[2 * pos:2 * pos + 2, 1] * H, 'g')
+            for pos in pos_p:
+                plt.plot(mid_lines_p[2 * pos:2 * pos + 2, 0] * W, mid_lines_p[2 * pos:2 * pos + 2, 1] * H, 'r')
+
+            # fit line 추가
+            d = 1 / 512
+            pred = pred.reshape(34, 2, 2)
+            minyl = pred[0, 0, 1]
+            minyr = pred[0, 1, 1]
+            maxyl = pred[33, 0, 1]
+            maxyr = pred[33, 1, 1]
+            left_r = np.arange(minyl, maxyl, d)
+            right_r = np.arange(minyr, maxyr, d)
+            left_c = calc_poli(left_r, coeff_l)
+            right_c = calc_poli(right_r, coeff_r)
+            left_line = np.concatenate((left_c.reshape(-1, 1), left_r.reshape(-1, 1)), axis=1)
+            right_line = np.concatenate((right_c.reshape(-1, 1), right_r.reshape(-1, 1)), axis=1)
+
+            plt.plot(left_line[:, 0] * W, left_line[:, 1] * H, color='magenta', alpha=0.5)
+            plt.plot(right_line[:, 0] * W, right_line[:, 1] * H, color='magenta', alpha=0.5)
+
+            plot_image(img, coord_red=fitted_pred, coord_gr=gt, coord_cy=pred)
+
+            # fit line 윤곽추가 맨윗좌표~맨아랫좌표
+            title = 'GT%.1f %d %d PR%.1f %d %d ER%.1f%% ' % (angles_g, pos_g[0], pos_g[1],
+                                                             angles_p, pos_p[0], pos_p[1], angle_err * 100)
+            plt.title('{}_R:PRED, G:GT'.format(ind) + '\n' + title)
+            # plt.show()
+            save_name = 'way1_{}'.format(ind)
+            plt.savefig(os.path.join(pred_path, save_name + '.jpg'))
+            plt.close()
+
+            processing_log.append(dict(
+                pos_GT0=pos_g[0], pos_GT1=pos_g[1], pos_PR0=pos_p[0], pos_PR1=pos_p[1],
+                angles_g=angles_g, angles_p=angles_p, err=angle_err
+            ))
+
+            ########################################################
+            #
+            #   Left fit과 right fit의 중점을 midpoint curve라고 생각하기
+            #
+            ########################################################
+    df = pd.DataFrame(processing_log)
+    df.to_csv(os.path.join(pred_path, save_name + '.csv'))
+
+    ##############################
+    #  WAY1
     #
-    # labels = read_labels(location = label_path)
-    # data_names = read_data_names(location = label_path)
     #
-    # batch_size = 8
     #
-    # customTransforms = [
-    #         CoordJitter(brightness=0, contrast=0, saturation=0, hue=0)
-    #         CoordCustomPad(512 / 256),
-    #         CoordResize((512, 256)),
-    #         CoordLabelNormalize()
-    #     ]
-    #
-    #     dset = CoordDataset(data_path, labels, data_names, transform_list=customTransforms)
-    #     loader_transform = DataLoader(dataset=dset, batch_size=1, shuffle=False)
-    #     index = 0
-    #     for val_data in loader_original:
-    #         img = val_data['image'].cpu().to(dtype=torch.float)[0]  # for batch size 1
-    #         lab = val_data['label'].cpu().to(dtype=torch.float)[0]
-    #         img = img.numpy()
-    #         lab = lab.numpy()
-    #         C, H, W = img.shape
-    #
-    #         if is_outlier(lab, H=H, W=W, margin=1):
-    #             if index not in outliers_count.keys():
-    #                 outliers_count[index] = []
-    #             outliers_count[index].append((img, lab, angle))
-    #         index += 1
-    #
-    # transform = tr.Compose([
-    #     tr.RandomRotation(30, expand = False)
-    #     tr.ToTensor()
-    # ])
+    #########################
+def post_way2(pred_path, loader_test):
+    #pred_path = './model/RH_SM_all_ep1999'
+    #data_path = './_images'
+    #label_path = './highres_labels'
+    preds = label_sort(read_labels(label_location=pred_path, title = 'labels_pred'))
+    #preds = to_relative(preds)
+    #write_labels(sorted_preds, location=pred_path, title='labels_sorted')
+
+    #상대좌표로 모든걸 프로세싱
+    fit_degree = 6
+
+    processing_log = []
+    ind = -1
+    for val_data in loader_test:
+        imgs = val_data['image'].cpu().numpy()  # for batch size 1
+        gts = val_data['label'].cpu().numpy()
+        for i, img in enumerate(imgs):
+            ind +=1
+            gt = gts[i]
+            H, W = 512, 256
+
+            pred = preds[ind]
+            pred = pred.reshape(34, 2, 2)
+
+            ########################################################
+            #
+            #   Left fit과 right fit의 중점을 midpoint curve라고 생각하기
+            #
+            ########################################################
+            left = pred[:, 0, :].reshape(-1, 2)
+            left_fit, _coeff_l = label_fit(left, fit_degree, full=True)
+
+            right = pred[:, 1, :].reshape(-1, 2)
+            right_fit, _coeff_r = label_fit(right, fit_degree, full=True)
+
+            coeff = (_coeff_l + _coeff_r) / 2
+            der_coeff = derivative_poli(coeff)
+            der_coeff = [c / (H / W) for c in der_coeff]  # 상대좌표는 해줘야함
+
+            pred = pred.reshape(17, 4, 2)
+            midpoints = np.zeros((17, 2))
+
+            # midpoint 추정을 피팅한걸로 해서 할 수도 있다
+            ############################################
+            #
+            #   midpoint curve의 도함수를 구하고
+            #   추정랜드마크의 r값을 통해 해당 기울기 구함
+            #   그다음 그거가지고 angle구함
+            #
+            #############################################
+            for i, pnts in enumerate(pred):
+                midpoints[i] = np.average(pnts, axis=0)
+            midpoints_x = midpoints[:, 1]
+            der_y = calc_poli(midpoints_x, der_coeff)
+            atans = np.arctan(der_y) * 180 / np.pi
+            # 1,-m이 slope vector
+            slopes = np.ones((17, 2))
+            slopes[:, 1] = -der_y
+            angles = _get_angle(slopes, slopes)
+            pos_p = np.argmax(angles)
+            pos_p = np.unravel_index(pos_p, angles.shape)
+            angles_p = angles[pos_p] / np.pi * 180
+
+            angles_g, pos_g, _, mid_lines_g, _ = calc_angle(gt, (1, 1))
+            angles_g = angles_g[0]
+
+            angle_err = np.abs(angles_g - angles_p) / angles_g
+
+            pos_g = pos_g[0:2]
+            pos_p = pos_p[0:2]
+
+            # right = np.tile(lab[:,1,:].expand_dims(1), (1,2,1))
+            C, H, W = img.shape
+            plt.figure()
+
+            for pos in pos_g:
+                plt.plot(mid_lines_g[2 * pos:2 * pos + 2, 0] * W, mid_lines_g[2 * pos:2 * pos + 2, 1] * H, 'g')
+
+            for pos in pos_p:
+                # plt.plot(mid_lines_p[2 * pos:2 * pos + 2, 0] * W, mid_lines_p[2 * pos:2 * pos + 2, 1] * H, 'r')
+                plt.plot([midpoints[pos, 0] * W], [midpoints[pos, 1] * H], 'ro', markersize=3.5)
+
+            #################################
+            # fit line 추가
+            #
+            #################################
+            d = 1 / 512
+            pred = pred.reshape(34, 2, 2)
+            minyl = pred[0, 0, 1]
+            minyr = pred[0, 1, 1]
+            maxyl = pred[33, 0, 1]
+            maxyr = pred[33, 1, 1]
+
+            left_r = np.arange(minyl, maxyl, d)
+            right_r = np.arange(minyr, maxyr, d)
+            left_c = calc_poli(left_r, _coeff_l)
+            right_c = calc_poli(right_r, _coeff_r)
+            left_line = np.concatenate((left_c.reshape(-1, 1), left_r.reshape(-1, 1)), axis=1)
+            right_line = np.concatenate((right_c.reshape(-1, 1), right_r.reshape(-1, 1)), axis=1)
+
+            mid_c = calc_poli(left_r, coeff)
+            mid_line = np.concatenate((mid_c.reshape(-1, 1), left_r.reshape(-1, 1)), axis=1)
+
+            # plt.plot(left_line[:, 0] * W, left_line[:, 1] * H, color='magenta', alpha=0.5)
+            # plt.plot(right_line[:, 0] * W, right_line[:, 1] * H, color='magenta', alpha=0.5)
+
+            plot_image(img, coord_red=midpoints.reshape(-1), coord_gr=gt, coord_cy=pred, line_red=mid_line)
+
+            # fit line 윤곽추가 맨윗좌표~맨아랫좌표
+            # title = 'GT%.1f %d %d PR%.1f %d %d ER%.1f%% ' % (angles_g, pos_g[0], pos_g[1],
+            #                                                  angles_p, pos_p[0], pos_p[1], angle_err * 100)
+            title = 'GT%.1f %d %d PR%.1f %.1f %.1f ER%.1f%% ' % (angles_g, pos_g[0], pos_g[1],
+                                                                 angles_p, atans[pos_p[0]], atans[pos_p[1]],
+                                                                 angle_err * 100)
+            plt.title('{}_R:PRED, G:GT'.format(ind) + '\n' + title)
+            # plt.show()
+            save_name = 'way2_{}'.format(ind)
+            plt.savefig(os.path.join(pred_path, save_name + '.jpg'))
+            plt.close()
+
+            processing_log.append(dict(
+                pos_GT0=pos_g[0], pos_GT1=pos_g[1], pos_PR0=pos_p[0], pos_PR1=pos_p[1],
+                angles_g=angles_g, angles_p=angles_p, err=angle_err
+            ))
+
+    df = pd.DataFrame(processing_log)
+    df.to_csv(os.path.join(pred_path, save_name + '.csv'))
 
 
-    # customTransforms = [
-    #                     CoordRandomRotate(max_angle = 5, expand = True, is_random =False),
-    #                     # CoordHorizontalFlip(0.5),
-    #                     # CoordVerticalFlip(0.5),
-    #                     CoordCustomPad(512 / 256),
-    #                     CoordResize((512, 256)),
-    #                     CoordLabelNormalize()
-    #                     ]
-    #
-    # data_path = './resized_images'
-    # label_path = './resized_labels'
-    # for ind, data_name in enumerate(data_names):
-    #     img = Image.open(os.path.join(data_path, data_names[ind]))
-    #     seg = np.load(os.path.join(label_path, data_name + '.npy'))
-    #     seg = tr.ToPILImage(seg)
-    #     img, seg = customTransforms[0](img, seg)
-    #     plt.figure()
-    #     plt.subplot(211)
-    #     plt.imshow(img)
-    #     plt.subplot(212)
-    #     plt.imshow(seg)
-    #     plt.show()
 
-
-    # import numpy as np
-    # max_angle = 8
-    #
-    # angles = np.arange(-max_angle, max_angle+0.1, 0.5)
-    #
-    # outliers_count = {}
-    # for angle in angles:
-    #     print('processing angle {}'.format(angle))
-    #     customTransforms = [
-    #         CoordRandomRotate(angle, expand=False, is_random=False),
-    #         CoordCustomPad(512 / 256),
-    #         CoordResize((512, 256)),
-    #         CoordLabelNormalize()
-    #     ]
-    #
-    #     dset = CoordDataset(data_path, labels, data_names, transform_list=customTransforms)
-    #     loader_original = DataLoader(dataset=dset, batch_size=1, shuffle=False)
-    #     index = 0
-    #     for val_data in loader_original:
-    #         img = val_data['image'].cpu().to(dtype=torch.float)[0]  # for batch size 1
-    #         lab = val_data['label'].cpu().to(dtype=torch.float)[0]
-    #         img = img.numpy()
-    #         lab = lab.numpy()
-    #         C, H, W = img.shape
-    #
-    #         if is_outlier(lab, H=H, W=W, margin=1):
-    #             if index not in outliers_count.keys():
-    #                 outliers_count[index] = []
-    #             outliers_count[index].append((img, lab, angle))
-    #         index += 1
-    #
-    # for ind, out_list in outliers_count.items():
-    #     print('img{}, outliers {}'.format(ind, len(out_list)))
-    #     for img, lab, angle in out_list:
-    #         plt.figure()
-    #         title = 'im_{}_angle_{}'.format(ind, angle)
-    #         plt.title(title)
-    #         plot_image(img, coord=lab)
-    #         plt.savefig(os.path.join('./plots', title + '.png'))
-    #         plt.close()

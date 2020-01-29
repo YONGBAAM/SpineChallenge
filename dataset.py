@@ -6,10 +6,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
-from helpers import read_labels, read_data_names
+from label_io import read_labels, read_data_names
+from label_transform import CoordCustomPad, CoordHorizontalFlip,CoordRandomRotate, CoordLabelNormalize, CoordResize, CoordVerticalFlip
 
-####아래 튜토리얼과 매우 비슷함!!
-# #https://pytorch.org/tutorials/beginner/data_loading_tutorial.html
+###############################################
+#
+#       Refactoring Finished
+#
+###############################################
+
+
+
 
 class CoordDataset(Dataset):
     def __init__(self, data_location, coords, data_names, transform_list = None, no_normalize = False):
@@ -41,40 +48,191 @@ class CoordDataset(Dataset):
             image = self.nor(image)
         return {'image' : image, 'label' : label}
 
+RH = [
+        CoordRandomRotate(max_angle=10, expand=False),
+        CoordHorizontalFlip(0.5),
+        CoordCustomPad(512 / 256),
+        CoordResize((512, 256)),
+        CoordLabelNormalize()
+    ]
+NOPAD = [
+    CoordRandomRotate(max_angle=10, expand=False),
+    CoordHorizontalFlip(0.5),
+    CoordResize((512, 256)),
+    CoordLabelNormalize()
+]
+UNF = [
+    CoordRandomRotate(max_angle=10, expand=False),
+    CoordHorizontalFlip(0.5),
+    CoordCustomPad(512 / 256, random='uniform'),
+    CoordResize((512, 256)),
+    CoordLabelNormalize()
+]
+NOPAD_VAL = [
+    #    CoordCustomPad(512 / 256),
+    CoordResize((512, 256)),
+    CoordLabelNormalize()
+]
 
-class SpineDataset(Dataset):
-    def __init__(self, data_location, label_location, data_names, coords_rel, transform = None, is_segment = True):
-        super(SpineDataset).__init__()
-        self.data_location = data_location
-        self.label_location = label_location
-        self.coords_rel = coords_rel
-        self.data_names = data_names
-        self.size = len(data_names)
-        self.transform = transform
-        self.is_segment = is_segment
+PAD_VAL = [
+    CoordCustomPad(512 / 256),
+    CoordResize((512, 256)),
+    CoordLabelNormalize()
+]
 
-    def __len__(self):
-        return self.size
-
-    def __getitem__(self, idx):
-        img_path = os.path.join(self.data_location, self.data_names[idx])
-        label_path = os.path.join(self.label_location, self.data_names[idx] + '.npy')
-
-        img = Image.open(img_path)
-        if self.transform is not None:
-            img = self.transform(img)
-            ##특정 트랜스폼은 lab에 적용 X!
-            #lab = self.transform(lab)
+def get_loader_train_val(tfm_train = 'nopad', tfm_val = 'nopad', batch_size_tr=64, batch_size_val=1, shuffle = True):
+    if type(tfm_val) == type('PAD'):
+        print(tfm_val)
+        if tfm_val.lower() == 'pad' or 'pad_val':
+            tfm_val = PAD_VAL
+        elif tfm_val.lower() == 'nopad' or 'nopad_val':
+            tfm_val = NOPAD_VAL
         else:
-            trs = transforms.ToTensor()
-            img = trs(img)
+            tfm_val = None
 
-        if self.is_segment:
-            lab = np.load(label_path)
-            lab = lab.reshape((1,lab.shape[0], lab.shape[1]))
-            sample = {'image' : img, 'label' : lab}
+    if type(tfm_train) == type('PAD'):
+        if tfm_train.lower() == 'unf' or tfm_train.lower() == 'uniform':
+            tfm_train = UNF
+        elif tfm_train.lower() == 'nopad':
+            tfm_train = NOPAD
         else:
-            coord = self.coords_rel[idx]
-            sample = {'image' : img, 'label' : coord}
+            tfm_train = None
 
-        return sample
+
+    data_path = './highres_images'
+    label_path = './highres_labels'
+
+    val_ratio = 0.1
+
+    labels = read_labels(label_path)
+    data_names = read_data_names(label_path)
+
+    N_all = len(data_names)
+    N_val = int(N_all * val_ratio)
+    N_train = N_all - N_val
+    # get train and validation data set
+    data_names_train = []
+    data_names_val = []
+    labels_train = []
+    labels_val = []
+
+    if not os.path.exists(os.path.join('./', 'val_permutation.npy')):
+        print('reset permutation')
+        permutation = np.random.permutation(N_all)
+        np.save(os.path.join('./', 'val_permutation.npy'), permutation)
+    else:
+        permutation = np.load(os.path.join('./', 'val_permutation.npy'))
+
+    for ind in permutation[:N_train]:
+        data_names_train.append(data_names[ind])
+        labels_train.append(labels[ind])
+    labels_train = np.asarray(labels_train)
+
+    for ind in permutation[N_train:]:
+        data_names_val.append(data_names[ind])
+        labels_val.append(labels[ind])
+    labels_val = np.asarray(labels_val)
+    #########################
+    dset_train = CoordDataset(data_path, labels_train, data_names_train, transform_list=tfm_train)
+    dset_val = CoordDataset(data_path, labels_val, data_names_val, transform_list=tfm_val)
+
+    loader_train = DataLoader(dataset=dset_train, batch_size=batch_size_tr, shuffle=shuffle)
+    loader_val = DataLoader(dataset=dset_val, batch_size=batch_size_val, shuffle=False)
+    return loader_train ,loader_val
+
+def get_loader_train(tfm = 'nopad', batch_size = 1, shuffle = False):
+    if type(tfm) == type('PAD'):
+        if tfm.lower() == 'pad_val':
+            tfm = PAD_VAL
+        elif tfm.lower() == 'nopad_val':
+            tfm = NOPAD_VAL
+        elif tfm.lower() == 'unf' or tfm.lower() == 'uniform':
+            tfm = UNF
+        elif tfm.lower() == 'nopad':
+            tfm = NOPAD
+        else:
+            tfm = None
+
+    data_path = './train_images'
+    label_path = './train_labels'
+    labels = read_labels(label_path)
+    data_names = read_data_names(label_path)
+    dset_train = CoordDataset(data_path, labels, data_names, transform_list=tfm)
+
+    loader_train = DataLoader(dataset=dset_train, batch_size=batch_size, shuffle=shuffle)
+    return loader_train
+
+def get_loader_test(tfm = 'nopad_val', batch_size = 1, shuffle = False):
+    if type(tfm) == type('PAD'):
+        if tfm.lower() == 'pad_val':
+            tfm = PAD_VAL
+        elif tfm.lower() == 'nopad_val':
+            tfm = NOPAD_VAL
+        elif tfm.lower() == 'unf' or tfm.lower() == 'uniform':
+            tfm = UNF
+        elif tfm.lower() == 'nopad':
+            tfm = NOPAD
+        else:
+            tfm = None
+
+
+    data_path = './test_images'
+    label_path = './test_labels'
+    labels = read_labels(label_path)
+    data_names = read_data_names(label_path)
+    dset_test = CoordDataset(data_path, labels, data_names, transform_list=tfm)
+
+    loader_test = DataLoader(dataset=dset_test, batch_size=batch_size, shuffle=shuffle)
+    return loader_test
+
+if __name__ == '__main__':
+    from label_io import plot_image
+    tloader = get_loader_test(batch_size=1)
+    index = 0
+    for testdata in tloader:
+        imgs = testdata['image'].cpu().detach().numpy()
+        labs = testdata['label'].cpu().detach().numpy()
+        for i, img in enumerate(imgs):
+            lab = labs[i]
+            plt.figure()
+            plot_image(img, coord_red= lab)
+            plt.show()
+
+
+#
+# class SpineDataset(Dataset):
+#     def __init__(self, data_location, label_location, data_names, coords_rel, transform = None, is_segment = True):
+#         super(SpineDataset).__init__()
+#         self.data_location = data_location
+#         self.label_location = label_location
+#         self.coords_rel = coords_rel
+#         self.data_names = data_names
+#         self.size = len(data_names)
+#         self.transform = transform
+#         self.is_segment = is_segment
+#
+#     def __len__(self):
+#         return self.size
+#
+#     def __getitem__(self, idx):
+#         img_path = os.path.join(self.data_location, self.data_names[idx])
+#         label_path = os.path.join(self.label_location, self.data_names[idx] + '.npy')
+#
+#         img = Image.open(img_path)
+#         if self.transform is not None:
+#             img = self.transform(img)
+#             ##특정 트랜스폼은 lab에 적용 X!
+#             #lab = self.transform(lab)
+#         else:
+#             trs = transforms.ToTensor()
+#             img = trs(img)
+#
+#         if self.is_segment:
+#             lab = np.load(label_path)
+#             lab = lab.reshape((1,lab.shape[0], lab.shape[1]))
+#             sample = {'image' : img, 'label' : lab}
+#         else:
+#             coord = self.coords_rel[idx]
+#             sample = {'image' : img, 'label' : coord}
+#
+#         return sample

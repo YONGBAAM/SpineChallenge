@@ -1,9 +1,11 @@
 #all files will be ignored
-resized_labels/*.npy
-resized_images/*.jpg
+train_images/
+test_images/
 Old/
 model/
 .idea/
 __pycache__/
 highres_images/*.jpg
 highres_labels/*.npy
+
+mytest.py

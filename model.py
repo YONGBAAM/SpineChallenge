@@ -3,6 +3,113 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 
+################################
+#
+#       Refactoring Finished
+#
+################################
+
+
+
+def get_feature_extractor(resnet_dim = 101, requires_grad = False, PoolDrop = True):
+    if resnet_dim == 34:#512 16 8
+        resnet_based = torchvision.models.resnet34(pretrained=True)
+    elif resnet_dim == 18: #512 16 8
+        resnet_based = torchvision.models.resnet18(pretrained=True)
+    else:#2048 16 8
+        resnet_based = torchvision.models.resnet101(pretrained=True)
+
+    for param in resnet_based.parameters():
+        param.requires_grad = requires_grad
+    if PoolDrop:
+        fe = nn.Sequential(*list(resnet_based.children())[:-2])
+    else:
+        print('Resnet does not drop pool layer')
+
+    return fe
+
+def get_classifier_deep(dropout = 0.5):
+    lst = [
+        nn.Conv2d(2048, 512, kernel_size=(1, 1)),  # 16 8
+        nn.BatchNorm2d(512),
+        nn.ReLU(),
+
+        nn.Conv2d(512, 512, 3, padding=1),  # 16 8
+        nn.BatchNorm2d(512),
+        nn.ReLU(),
+
+        nn.Conv2d(512, 128, kernel_size=(1, 1)),  # 16 8
+        nn.BatchNorm2d(128),
+        nn.ReLU(),
+
+        nn.Conv2d(128, 128, 3, padding=1),
+        nn.BatchNorm2d(128),
+        nn.ReLU(),  #16*8
+
+        #nn.AdaptiveAvgPool2d(output_size=(8, 4)),
+        nn.Conv2d(128,128,kernel_size=(4,4), stride = 2, padding=1),  #8 * 4
+        nn.BatchNorm2d(128),
+        nn.ReLU(),
+
+        nn.Flatten(),
+        nn.Linear(8*4*128, 1024),
+        nn.ReLU(),
+        nn.Dropout(dropout),
+
+        nn.Linear(1024,136)
+
+        ]
+    classifier = nn.Sequential(*lst)
+    return classifier
+
+def get_classifier_conv(dropout = 0.5, with_spine = False):
+    lst = [nn.Conv2d(2048,512,kernel_size=(1,1)), #16 8
+        nn.BatchNorm2d(512),
+        nn.ReLU(),
+        nn.Conv2d(512,512,3, padding = 1), #16 8
+        nn.BatchNorm2d(512),
+        nn.ReLU(),
+        nn.Conv2d(512,512,3,padding = 1),
+        nn.BatchNorm2d(512),
+        nn.ReLU(), #128*16*8
+        nn.AdaptiveAvgPool2d(output_size = (2,2)),
+        nn.Flatten(),
+        nn.Linear(512*2*2,512),
+        nn.ReLU(),
+        nn.Dropout(dropout)
+    ]
+    if with_spine:
+        print("Do not Use it")
+    else:
+        lst.append(nn.Linear(512,136))
+
+    classifier = nn.Sequential(*lst)
+    return classifier
+
+class LandmarkNet(nn.Module):
+    def __init__(self, classifier = None,PoolDrop = True, requires_grad = False):
+        super(LandmarkNet, self).__init__()
+        self.extractor = get_feature_extractor(requires_grad=requires_grad, PoolDrop = PoolDrop)
+
+        if PoolDrop:
+            if classifier == None:
+                self.classifier = get_classifier_deep()
+            else:
+                self.classifier = classifier
+        else:#Legacy
+            print('Do not use it')
+
+    def forward(self, x):
+        if x.shape[1] ==1:#grayscale image
+            x = x.repeat((1,3,1,1))
+        return self.classifier(self.extractor(x))
+
+    def to(self, *args, **kwargs):
+        self = super().to(*args, **kwargs)
+        self.classifier = self.classifier.to(*args, **kwargs)
+        self.extractor = self.extractor.to(*args, **kwargs)
+        return self
+
 class CCB(nn.Module):
     def __init__(self, input_channel, output_channel):
         super(CCB, self).__init__()
@@ -131,105 +238,6 @@ class SpinalStructured(nn.Module):
         self.S = self.S.to(*args, **kwargs)
         return self
 
-def get_feature_extractor(requires_grad = False, PoolDrop = False):
-    resnet_based = torchvision.models.resnet101(pretrained=True)
-    for param in resnet_based.parameters():
-        param.requires_grad = requires_grad
-    if PoolDrop:
-        fe = nn.Sequential(*list(resnet_based.children())[:-2])
-    else:
-        fe = nn.Sequential(*list(resnet_based.children())[:-1])
-    return fe
-
-def get_classifier_deep(dropout = 0.5):
-    lst = [
-        nn.Conv2d(2048, 512, kernel_size=(1, 1)),  # 16 8
-        nn.BatchNorm2d(512),
-        nn.ReLU(),
-
-        nn.Conv2d(512, 512, 3, padding=1),  # 16 8
-        nn.BatchNorm2d(512),
-        nn.ReLU(),
-
-        nn.Conv2d(512, 128, kernel_size=(1, 1)),  # 16 8
-        nn.BatchNorm2d(128),
-        nn.ReLU(),
-
-        nn.Conv2d(128, 128, 3, padding=1),
-        nn.BatchNorm2d(128),
-        nn.ReLU(),  #16*8
-
-        #nn.AdaptiveAvgPool2d(output_size=(8, 4)),
-        nn.Conv2d(128,128,kernel_size=(4,4), stride = 2, padding=1),  #8 * 4
-        nn.BatchNorm2d(128),
-        nn.ReLU(),
-
-        nn.Flatten(),
-        nn.Linear(8*4*128, 1024),
-        nn.ReLU(),
-        nn.Dropout(dropout),
-
-        nn.Linear(1024,136)
-
-        ]
-    classifier = nn.Sequential(*lst)
-    return classifier
-
-
-def get_classifier_conv(dropout = 0.5, with_spine = False):
-    lst = [nn.Conv2d(2048,512,kernel_size=(1,1)), #16 8
-        nn.BatchNorm2d(512),
-        nn.ReLU(),
-        nn.Conv2d(512,512,3, padding = 1), #16 8
-        nn.BatchNorm2d(512),
-        nn.ReLU(),
-        nn.Conv2d(512,512,3,padding = 1),
-        nn.BatchNorm2d(512),
-        nn.ReLU(), #128*16*8
-        nn.AdaptiveAvgPool2d(output_size = (2,2)),
-        nn.Flatten(),
-        nn.Linear(512*2*2,512),
-        nn.ReLU(),
-        nn.Dropout(dropout)
-    ]
-    if with_spine:
-        print("Do not Use it")
-    else:
-        lst.append(nn.Linear(512,136))
-
-    classifier = nn.Sequential(*lst)
-    return classifier
-
-class LandmarkNet(nn.Module):
-    def __init__(self, classifier = None,PoolDrop = True, requires_grad = False):
-        super(LandmarkNet, self).__init__()
-
-        self.extractor = get_feature_extractor(requires_grad=requires_grad, PoolDrop = PoolDrop)
-
-        if PoolDrop:
-            if classifier == None:
-                self.classifier = get_classifier_conv(dropout = 0)
-            else:
-                self.classifier = classifier
-        else:#Legacy
-            print('Do not use it')
-
-
-
-
-
-    def forward(self, x):
-        if x.shape[1] ==1:#grayscale image
-            x = x.repeat((1,3,1,1))
-        return self.classifier(self.extractor(x))
-
-    def to(self, *args, **kwargs):
-        self = super().to(*args, **kwargs)
-        self.classifier = self.classifier.to(*args, **kwargs)
-        self.extractor = self.extractor.to(*args, **kwargs)
-        return self
-
-
 if __name__ == '__main__':
     import numpy as np
     import os
@@ -238,17 +246,16 @@ if __name__ == '__main__':
     from torch.utils.data import Dataset, DataLoader
     import torchvision.transforms as transforms
 
-    from helpers import read_data_names, read_labels, plot_image, chw, hwc
-    from dataset import SpineDataset, CoordDataset
-    from model import SegmentNet, LandmarkNet, get_classifier, SpinalStructured
-    from postprocessing import CoordDataset, CoordCustomPad, CoordHorizontalFlip, CoordRandomRotate, \
+    from label_io import read_data_names, read_labels, plot_image, chw, hwc
+    from dataset import CoordDataset
+    from label_transform import CoordCustomPad, CoordHorizontalFlip, CoordRandomRotate, \
         CoordLabelNormalize, CoordResize, CoordVerticalFlip
 
     #def label-to-image
-    data_path = './highres_images'
-    label_path = './highres_labels'
-    labels = read_labels(location = label_path)
-    data_names = read_data_names(location = label_path)
+    data_path = './train_images'
+    label_path = './train_labels'
+    labels = read_labels(label_location= label_path)
+    data_names = read_data_names(label_location= label_path)
 
     batch_size = 8
 
@@ -301,7 +308,7 @@ if __name__ == '__main__':
     _imgs = _train_data['image']
     _labels = _train_data['label']
     _imgs = _imgs.repeat((1,3,1,1))
-    ext = get_feature_extractor()
+    ext = get_feature_extractor(resnet_dim=34)
     out = ext(_imgs)
     print(out.shape)
     #512 256은 8 2048 16 8 나옴
@@ -309,39 +316,3 @@ if __name__ == '__main__':
 
 
 #class BoostLayer(nn.Module):
-#     def __init__(self, input_dim, output_dim, threshold = 2, device = None):
-#         super(BoostLayer, self).__init__()
-#         self.n_sigma = threshold
-#
-#
-#         self.weight = nn.Parameter(torch.zeros(input_dim, output_dim))
-#         nn.init.xavier_normal_(self.weight)
-#         self.bias1 = nn.Parameter(torch.zeros(output_dim))
-#         self.bias2 = nn.Parameter(torch.zeros(input_dim))
-#
-#         #이거 좀더 팬시하게 할 수 있을텐데
-#         if device is not None:
-#             self.weight.to(device)
-#             self.bias1.to(device)
-#             self.bias2.to(device)
-#
-#     def forward(self, x):
-#         N, C = x.shape[0], x.shape[1]
-#         R = x.mm(self.weight) + self.bias1
-#         R = F.relu(R).mm(self.weight.transpose(0,1))
-#         errors = (x-R)**2
-#         mean = torch.mean(x, dim = -1, keepdim = False)
-#         std = torch.std(x, dim = -1, keepdim = False)
-#         threshold = (self.n_sigma * std) ** 2
-#         for n in range(N):
-#             mask = errors[n]>threshold[n].item()
-#             x[n][mask] = mean[n]
-#         y = x.mm(self.weight) + self.bias1
-#         return y
-#
-#     def to(self, *args, **kwargs):
-#         self = super().to(*args, **kwargs)
-#         self.weight = self.weight.to(*args, **kwargs)
-#         self.bias1 = self.bias1.to(*args, **kwargs)
-#         self.bias2 = self.bias2.to(*args, **kwargs)
-#         return self
