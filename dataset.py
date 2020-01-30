@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
-from label_io import read_labels, read_data_names
+from label_io import read_labels, read_data_names, plot_image
 from label_transform import CoordCustomPad, CoordHorizontalFlip,CoordRandomRotate, CoordLabelNormalize, CoordResize, CoordVerticalFlip
 
 ###############################################
@@ -15,46 +15,13 @@ from label_transform import CoordCustomPad, CoordHorizontalFlip,CoordRandomRotat
 #
 ###############################################
 
-
-
-
-class CoordDataset(Dataset):
-    def __init__(self, data_location, coords, data_names, transform_list = None, no_normalize = False):
-        super(CoordDataset).__init__()
-        self.data_location = data_location
-        self.labels = coords
-        self.data_names = data_names
-        self.size = len(data_names)
-        self.transform_list = transform_list
-        self.toTensor = transforms.ToTensor()
-        self.nor = transforms.Normalize((0.5,), (0.5,))
-        self.toImage = transforms.ToPILImage()
-        self.no_normalize = no_normalize
-
-    def __len__(self):
-        return self.size
-
-    def __getitem__(self, idx):
-        img_path = os.path.join(self.data_location, self.data_names[idx])
-        image = Image.open(img_path)
-        label = self.labels[idx]
-
-        if self.transform_list != None:
-            for transform in self.transform_list:
-                image, label = transform(image, label)
-
-        image = self.toTensor(image)
-        if self.no_normalize:
-            image = self.nor(image)
-        return {'image' : image, 'label' : label}
-
-RH = [
+RHP = [
         CoordRandomRotate(max_angle=10, expand=False),
         CoordHorizontalFlip(0.5),
         CoordCustomPad(512 / 256),
         CoordResize((512, 256)),
         CoordLabelNormalize()
-    ]
+]
 NOPAD = [
     CoordRandomRotate(max_angle=10, expand=False),
     CoordHorizontalFlip(0.5),
@@ -63,6 +30,13 @@ NOPAD = [
 ]
 UNF = [
     CoordRandomRotate(max_angle=10, expand=False),
+    CoordHorizontalFlip(0.5),
+    CoordCustomPad(512 / 256, random='uniform'),
+    CoordResize((512, 256)),
+    CoordLabelNormalize()
+]
+UNF_E = [
+    CoordRandomRotate(max_angle=10, expand=True),
     CoordHorizontalFlip(0.5),
     CoordCustomPad(512 / 256, random='uniform'),
     CoordResize((512, 256)),
@@ -80,27 +54,62 @@ PAD_VAL = [
     CoordLabelNormalize()
 ]
 
+class CoordDataset(Dataset):
+    def __init__(self, data_location, coords, data_names, transform_list = None):
+        super(CoordDataset).__init__()
+        self.data_location = data_location
+        self.labels = coords
+        self.data_names = data_names
+        self.size = len(data_names)
+        self.transform_list = transform_list
+        self.toTensor = transforms.ToTensor()
+        self.nor = transforms.Normalize((0.5,), (0.5,))
+        self.toImage = transforms.ToPILImage()
+
+    def __len__(self):
+        return self.size
+
+    def __getitem__(self, idx):
+        img_path = os.path.join(self.data_location, self.data_names[idx])
+        image = Image.open(img_path)
+        label = self.labels[idx]
+
+        if self.transform_list != None:
+            for transform in self.transform_list:
+                image, label = transform(image, label)
+
+        image = self.toTensor(image)
+        image = self.nor(image)
+        return {'image' : image, 'label' : label}
+
 def get_loader_train_val(tfm_train = 'nopad', tfm_val = 'nopad', batch_size_tr=64, batch_size_val=1, shuffle = True):
-    if type(tfm_val) == type('PAD'):
-        print(tfm_val)
-        if tfm_val.lower() == 'pad' or 'pad_val':
-            tfm_val = PAD_VAL
-        elif tfm_val.lower() == 'nopad' or 'nopad_val':
-            tfm_val = NOPAD_VAL
+    tfm = tfm_train
+    if type(tfm) == type('PAD'):
+        if tfm.lower() == 'pad_val':
+            tfm = PAD_VAL
+        elif tfm.lower() == 'nopad_val':
+            tfm = NOPAD_VAL
+        elif tfm.lower() == 'pad' or tfm.lower() == 'unf' or tfm.lower() == 'uniform':
+            tfm = UNF
+        elif tfm.lower() == 'nopad':
+            tfm = NOPAD
         else:
-            tfm_val = None
+            tfm = None
+    tfm_train = tfm
 
-    if type(tfm_train) == type('PAD'):
-        if tfm_train.lower() == 'unf' or tfm_train.lower() == 'uniform':
-            tfm_train = UNF
-        elif tfm_train.lower() == 'nopad':
-            tfm_train = NOPAD
+    tfm = tfm_val
+    if type(tfm) == type('PAD'):
+        if tfm.lower() == 'pad_val' or tfm.lower() == 'pad':
+            tfm = PAD_VAL
+        elif tfm.lower() == 'nopad_val' or tfm.lower() == 'nopad':
+            tfm = NOPAD_VAL
         else:
-            tfm_train = None
+            tfm = None
+    tfm_val = tfm
 
 
-    data_path = './highres_images'
-    label_path = './highres_labels'
+    data_path = './train_images'
+    label_path = './train_labels'
 
     val_ratio = 0.1
 
@@ -140,13 +149,13 @@ def get_loader_train_val(tfm_train = 'nopad', tfm_val = 'nopad', batch_size_tr=6
     loader_val = DataLoader(dataset=dset_val, batch_size=batch_size_val, shuffle=False)
     return loader_train ,loader_val
 
-def get_loader_train(tfm = 'nopad', batch_size = 1, shuffle = False):
+def get_loader_train(tfm = 'nopad', batch_size = 64, shuffle = False):
     if type(tfm) == type('PAD'):
         if tfm.lower() == 'pad_val':
             tfm = PAD_VAL
         elif tfm.lower() == 'nopad_val':
             tfm = NOPAD_VAL
-        elif tfm.lower() == 'unf' or tfm.lower() == 'uniform':
+        elif tfm.lower() == 'pad' or tfm.lower() == 'unf' or tfm.lower() == 'uniform':
             tfm = UNF
         elif tfm.lower() == 'nopad':
             tfm = NOPAD
@@ -162,16 +171,12 @@ def get_loader_train(tfm = 'nopad', batch_size = 1, shuffle = False):
     loader_train = DataLoader(dataset=dset_train, batch_size=batch_size, shuffle=shuffle)
     return loader_train
 
-def get_loader_test(tfm = 'nopad_val', batch_size = 1, shuffle = False):
+def get_loader_test(tfm = 'nopad', batch_size = 1, shuffle = False):
     if type(tfm) == type('PAD'):
-        if tfm.lower() == 'pad_val':
+        if tfm.lower() == 'pad_val' or tfm.lower() == 'pad':
             tfm = PAD_VAL
-        elif tfm.lower() == 'nopad_val':
+        elif tfm.lower() == 'nopad_val' or tfm.lower() == 'nopad':
             tfm = NOPAD_VAL
-        elif tfm.lower() == 'unf' or tfm.lower() == 'uniform':
-            tfm = UNF
-        elif tfm.lower() == 'nopad':
-            tfm = NOPAD
         else:
             tfm = None
 
@@ -186,8 +191,22 @@ def get_loader_test(tfm = 'nopad_val', batch_size = 1, shuffle = False):
     return loader_test
 
 if __name__ == '__main__':
-    from label_io import plot_image
-    tloader = get_loader_test(batch_size=1)
+    ############Dataset, transform test
+
+
+    RH_E = [
+        CoordRandomRotate(max_angle=10, expand=True),
+        CoordHorizontalFlip(0.5),
+        CoordCustomPad(512 / 256),
+        CoordResize((512, 256)),
+        CoordLabelNormalize()
+    ]
+
+    ###############################
+    #   Get target loader
+    tloader = get_loader_train(tfm = RH_E, batch_size=64, shuffle = False)
+
+
     index = 0
     for testdata in tloader:
         imgs = testdata['image'].cpu().detach().numpy()
@@ -196,6 +215,7 @@ if __name__ == '__main__':
             lab = labs[i]
             plt.figure()
             plot_image(img, coord_red= lab)
+            plt.title('train {}'.format(index))
             plt.show()
 
 

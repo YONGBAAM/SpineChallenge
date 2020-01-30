@@ -2,10 +2,9 @@
 train_images/
 test_images/
 Old/
+plots/
 model/
 .idea/
 __pycache__/
-highres_images/*.jpg
-highres_labels/*.npy
 
 mytest.py

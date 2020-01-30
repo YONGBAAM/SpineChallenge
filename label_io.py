@@ -99,7 +99,7 @@ def to_relative(label, H = 512, W = 256):
     factor = np.tile(np.asarray([W,H]), (rep,))
     rel_label = np.copy(label)
     rel_label = rel_label.flatten()/factor
-    rel_label = rel_label.reshape(shape).astype('int')
+    rel_label = rel_label.reshape(shape)
     return rel_label
 
 def to_absolute(label, H = 512, W = 256):
@@ -114,7 +114,7 @@ def to_absolute(label, H = 512, W = 256):
     factor = np.tile(np.asarray([W, H]), (rep,))
     abs_label = np.copy(label)
     abs_label = abs_label.flatten() * factor
-    abs_label = abs_label.reshape(shape)
+    abs_label = abs_label.reshape(shape).astype(int)
     return abs_label
 
 def read_data_names(label_location):

@@ -5,50 +5,72 @@ import torch.nn as nn
 
 
 from label_io import read_data_names, read_labels, plot_image, chw, hwc
-from dataset import CoordDataset, get_loader_train, get_loader_test
+from dataset import CoordDataset, get_loader_train, get_loader_test, get_loader_train_val
 from model import SegmentNet, LandmarkNet, get_classifier_deep, SpinalStructured, get_classifier_conv
-
+from train import Trainer
 
 '''
-
-세이브시 trainer 그대로 세이브
-load시 그대로 할수있게
-abort랑 이어서트레이닝 구현 
-그냥optim이랑 모델만 세이브하자.
-
 git : revert to last commit 한다음 pull해주면 되겠다!
 
-abort 시그널
-
-classifier dim을 키우고 dropout을 키워버릴까??
+왜 로스가 올라가지?
+레즈넷 34모델 풀트레이닝 해보자
 
 
 '''
-
 device = torch.device("cuda:0" if torch.cuda.is_available()  else "cpu")
-batch_size = 64
-loader_train = get_loader_train(tfm = 'nopad', batch_size=batch_size, shuffle=True)
-loader_val = get_loader_test(tfm = 'nopad_val', batch_size = 1, shuffle = False )
 
 ###################################
 # TRAINING           ##############
 ###################################
-from train import Trainer
-state_dict = dict(num_epochs=20, learning_rates=1e-5, save_every=20,
-                  all_model_save=0.99,
-                  is_lr_decay=True, lrdecay_thres=20, lrdecay_every=20,
-                  model_save_dest="./model", dropout_prob=0.5
-                  )
-state_dict['model_name'] = 'NEW_TEST'
-classifier = get_classifier_deep(dropout=state_dict['dropout_prob'])
 
-model = LandmarkNet(PoolDrop=True, classifier=classifier).to(device)
+config = dict(num_epochs=1000, learning_rates=1e-5, save_every=25,
+              all_model_save=0.99,
+              is_lr_decay=True, lrdecay_thres=0.1, lrdecay_every=50, lrdecay_window = 50,
+              model_save_dest="./model", dropout_prob=0.5
+              )
+batch_size = 24
+pad_mode = 'nopad' # pad or nopad
+config['model_name'] = 'renew_34'
+config['model_name'] += '_' + pad_mode
+config['learning_rates'] = 3e-3
+
+####    DataLoader
+loader_train = get_loader_train(tfm = pad_mode, batch_size=batch_size, shuffle=True)
+loader_val = get_loader_test(tfm = pad_mode, batch_size = 1, shuffle = False )
+####    MODEL 101_deep
+#model = LandmarkNet(resnet_dim=101, classifier = get_classifier_deep(config['dropout_prob'])).to(device)
+
+####    MODEL 34_swallow
+cl34 = nn.Sequential(*[#512 16 8 for 34
+    nn.Conv2d(512,128,1),
+    nn.BatchNorm2d(128),
+    nn.ReLU(),
+
+    nn.Conv2d(128,128,3,padding = 1),
+    nn.BatchNorm2d(128),
+    nn.ReLU(),
+
+    nn.Conv2d(128,128,kernel_size=4, stride=2, padding =1),
+    nn.BatchNorm2d(128),
+    nn.ReLU(),
+
+    nn.Flatten(),
+    nn.Linear(128*8*4,4096),
+    nn.ReLU(),
+    nn.Dropout(config['dropout_prob']),
+
+    nn.Linear(4096,136)
+
+])
+model = LandmarkNet(resnet_dim=34, classifier = cl34, requires_grad=True).to(device)
+
 trainer = Trainer(model=model,
-                  optimizer=torch.optim.Adam(model.parameters(), lr=state_dict['learning_rates']),
-                    loader_train = loader_train, loader_val = loader_val, criterion = nn.SmoothL1Loss(), ** state_dict)
+                  optimizer=torch.optim.Adam(model.parameters(), lr=config['learning_rates']),
+                  loader_train = loader_train, loader_val = loader_val, criterion = nn.SmoothL1Loss(), **config)
 
 #trainer.test(test_loader=loader_val, load_model_name='NEW_TEST_ep4_tL1.65e+16_vL1.55e+00.tar')
-trainer.load_model('NEW_TEST_ep3_tL6.69e+12_vL1.36e+00.tar', model_only=False)
+trainer.load_model('MIG_34_nopad_ep4_tL4.93e-04_vL4.76e-04.tar', model_only = False)
+#trainer.load_model()
 trainer.train()
 
 

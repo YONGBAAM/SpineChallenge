@@ -87,11 +87,11 @@ def get_classifier_conv(dropout = 0.5, with_spine = False):
     return classifier
 
 class LandmarkNet(nn.Module):
-    def __init__(self, classifier = None,PoolDrop = True, requires_grad = False):
+    def __init__(self, resnet_dim = 101, classifier = None, pool_drop = True, requires_grad = False):
         super(LandmarkNet, self).__init__()
-        self.extractor = get_feature_extractor(requires_grad=requires_grad, PoolDrop = PoolDrop)
+        self.extractor = get_feature_extractor(resnet_dim= resnet_dim, requires_grad=requires_grad, PoolDrop = pool_drop)
 
-        if PoolDrop:
+        if pool_drop:
             if classifier == None:
                 self.classifier = get_classifier_deep()
             else:

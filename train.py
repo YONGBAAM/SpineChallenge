@@ -36,6 +36,7 @@ class Trainer():
         self.lrdecay_thres = kwargs.get('lrdecay_thres', 0.1)
         self.is_lr_decay = kwargs.get('is_lr_decay', False)
         self.lrdecay_every = kwargs.get('lrdecay_every', 500)
+        self.lrdecay_window = kwargs.get('lrdecay_window', 50)
         self.last_lrdecay = 0
 
         self.dropout_prob = kwargs.get('dropout_prob', 0)
@@ -69,7 +70,7 @@ class Trainer():
         with open('./signal.txt', 'w') as f:
             f.write('#abort')
 
-
+    #testing the
     def _train_epoch(self):
         model = self.model
         model.train()
@@ -120,6 +121,7 @@ class Trainer():
                 title = self.model_name + '_ep%d' % (self.current_ep)
 
                 val_losses = self.validate(title_if_plot_save = title)
+                #val_losses = [0]
                 self.save_model(title + '_tL%.2e_vL%.2e'%(np.average(losses), np.average(val_losses)), model_only=False)
                 self.update_log(logline = 'ep{} model saved\tTL : {}'.format(self.current_ep, title))
                 self.update_log(logline = "ep %d, loss_t %.2e, loss_v %.2e"%(self.current_ep, np.average(losses), np.average(val_losses)))
@@ -165,10 +167,13 @@ class Trainer():
             else:
                 model_only = True
 
+        #get model_load_path
+        #절대경로 모드
+        if os.path.exists(title):
+            model_load_path = title
         #현재 path에 모델 있으면 불러오기
-        if os.path.exists(os.path.join(self.model_save_dest, title)):
+        elif os.path.exists(os.path.join(self.model_save_dest, title)):
             model_load_path = os.path.join(self.model_save_dest, title)
-
         else: #아니면 올라가서 찾자
             up_path = self.model_save_dest.split('\\')
             up_path = '/'.join(up_path[:-1])
@@ -314,7 +319,7 @@ class Trainer():
     def lr_decay(self):
         current_ep = self.current_ep
         if current_ep > self.lrdecay_every + self.last_lrdecay or self.testmode:
-            window = int(self.lrdecay_every/2)
+            window = self.lrdecay_window
             before_average = np.average(self.loss_list[current_ep -1 - self.save_every:
                                         current_ep -1 - self.save_every + window])
             recent_loss = np.array(self.loss_list[current_ep-window:current_ep])

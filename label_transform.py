@@ -9,6 +9,8 @@ except ImportError:
 import numpy as np
 import collections
 
+from label_io import to_relative, to_absolute
+
 if sys.version_info < (3, 3):
     Sequence = collections.Sequence
     Iterable = collections.Iterable
@@ -30,6 +32,8 @@ else:
 #   Refactoring Finished
 #
 #   모두 PIL 이미지 기준으로 한 트랜스폼임.
+#
+#   Label 다룰때는 맨처음 라벨 카피 해주기!
 #
 #################################
 
@@ -80,11 +84,11 @@ class CoordRandomRotate:
 
         W1, H1 = image.size
 
-
         if self.expand:
+            image = image.rotate(angle, expand=True)
             W2, H2 = image.size
             label = rotate_label(label, angle, H = H1, W = W1, new_centerXY=(W2 / 2, H2 / 2))
-            image = image.rotate(angle, expand=True)
+
         else:
             r_label = rotate_label(label, angle, H = H1, W = W1)
             if not is_outlier(label, H1, W1, margin = 1):
@@ -163,10 +167,7 @@ class CoordLabelNormalize:
 
     def __call__(self, image, label):
         W,H = image.size
-        r_label = label.reshape(-1,2)
-        r_label[:,0] /= W
-        r_label[:,1] /= H
-        r_label = r_label.reshape(-1)
+        r_label = to_relative(label, H=H, W=W)
         return image, r_label
 
 class CoordJitter:
@@ -193,28 +194,23 @@ class SegCustomPad:
         seg_pad = TF.pad(image, padding=(left_pad, 0, right_pad, 0), padding_mode='constant')
         return im_pad, seg_pad
 
-
 def rotate_label(label, degree, H, W, new_centerXY=None):
-
     theta = degree / 180 * np.pi
     s = np.sin(-theta)  # x y 축 바뀜
     c = np.cos(-theta)
     rot_matrix = [[c, s], [-s, c]]  # 회전행렬 transpose
-
-    label = label.reshape(-1, 2)
+    r_label = label.reshape(-1, 2)
     origin = np.asarray([W / 2, H / 2])  # x y좌표
-    label = label - origin
-    label = np.dot(label, rot_matrix)
+    r_label = r_label - origin
+    r_label = np.dot(r_label, rot_matrix)
     if new_centerXY is None:
         new_centerXY = origin
-    label += new_centerXY
-    label = label.reshape(-1)
-    return label
+    r_label += new_centerXY
+    r_label = r_label.reshape(-1)
+    return r_label
 
 def is_outlier(label, H, W, margin=0):
     label_r = label.reshape(-1,2)
-    label_r[:,0] *= W
-    label_r[:,1] *= H
 
     L = label_r[:,0] <0 + margin
     R = label_r[:,0] >W -margin
