@@ -12,9 +12,13 @@ from train import Trainer
 '''
 git : revert to last commit 한다음 pull해주면 되겠다!
 
-왜 로스가 올라가지?
-레즈넷 34모델 풀트레이닝 해보자
+Labtop : 34 nopad
+desktop : 101 nopad
 
+cloud : 101 pad
+34 nopad
+101 nopad plus grad
+each 2000
 
 '''
 device = torch.device("cuda:0" if torch.cuda.is_available()  else "cpu")
@@ -23,7 +27,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available()  else "cpu")
 # TRAINING           ##############
 ###################################
 
-config = dict(num_epochs=1000, learning_rates=1e-5, save_every=25,
+config = dict(num_epochs=2000, learning_rates=1e-5, save_every=25,
               all_model_save=0.99,
               is_lr_decay=True, lrdecay_thres=0.1, lrdecay_every=200, lrdecay_window = 50,
               model_save_dest="./model", dropout_prob=0.5
