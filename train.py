@@ -37,7 +37,7 @@ class Trainer():
         self.is_lr_decay = kwargs.get('is_lr_decay', False)
         self.lrdecay_every = kwargs.get('lrdecay_every', 500)
         self.lrdecay_window = kwargs.get('lrdecay_window', 50)
-        self.last_lrdecay = 0
+        self.last_lrdecay = self.start_ep
 
         self.dropout_prob = kwargs.get('dropout_prob', 0)
 
@@ -105,7 +105,8 @@ class Trainer():
 
             val_losses = self.validate()
             self.val_loss_list.append(np.average(val_losses))
-            print("ep %d, loss_t %.2e, loss_v %.2e"%(self.current_ep, np.average(losses), np.average(val_losses)))
+            show_string = ("{} %d: l_t %.2e, l_v %.2e"%(self.current_ep, np.average(losses), np.average(val_losses))).format(self.model_name)
+            print(show_string)
             if self.is_lr_decay:
                 self.lr_decay()
 
@@ -152,6 +153,7 @@ class Trainer():
         else:
             loaddata = torch.load(path)
             self.start_ep = loaddata['current_ep'] + 1
+            self.last_lrdecay = self.start_ep
             self.model.load_state_dict(loaddata['model'])
             self.optimizer.load_state_dict(loaddata['optimizer'])
             for param_group in self.optimizer.param_groups:
@@ -232,7 +234,7 @@ class Trainer():
                 plt.subplot(241 + i)
                 plot_image(imgs[ind], coord_red=true_labels[ind], coord_gr=val_labels[ind])
                 plt.title('val {}'.format(perm[i]))
-            plt.savefig(os.path.join(self.model_save_dest, title_if_plot_save + '.jpg'))
+            plt.savefig(os.path.join(self.model_save_dest, title_if_plot_save + '.png'))
             plt.close()
 
         return val_losses
@@ -288,7 +290,7 @@ class Trainer():
             plt.figure()
             plot_image(imgs[ind], coord_red=true_labels[ind], coord_gr=test_labels[ind])
             plt.title(title + '_{}'.format(ind))
-            plt.savefig(os.path.join(result_save_path, title + '_{}.jpg'.format(ind)))
+            plt.savefig(os.path.join(result_save_path, title + '_{}.png'.format(ind)))
             plt.close()
 
         #save absolute label result

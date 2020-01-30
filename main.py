@@ -25,14 +25,13 @@ device = torch.device("cuda:0" if torch.cuda.is_available()  else "cpu")
 
 config = dict(num_epochs=1000, learning_rates=1e-5, save_every=25,
               all_model_save=0.99,
-              is_lr_decay=True, lrdecay_thres=0.1, lrdecay_every=50, lrdecay_window = 50,
+              is_lr_decay=True, lrdecay_thres=0.1, lrdecay_every=200, lrdecay_window = 50,
               model_save_dest="./model", dropout_prob=0.5
               )
 batch_size = 24
 pad_mode = 'nopad' # pad or nopad
 config['model_name'] = 'renew_34'
 config['model_name'] += '_' + pad_mode
-config['learning_rates'] = 3e-3
 
 ####    DataLoader
 loader_train = get_loader_train(tfm = pad_mode, batch_size=batch_size, shuffle=True)
@@ -69,7 +68,7 @@ trainer = Trainer(model=model,
                   loader_train = loader_train, loader_val = loader_val, criterion = nn.SmoothL1Loss(), **config)
 
 #trainer.test(test_loader=loader_val, load_model_name='NEW_TEST_ep4_tL1.65e+16_vL1.55e+00.tar')
-trainer.load_model('MIG_34_nopad_ep4_tL4.93e-04_vL4.76e-04.tar', model_only = False)
+trainer.load_model('renew_34_nopad_ep350_tL4.32e-04_vL5.09e-04.tar', model_only = False)
 #trainer.load_model()
 trainer.train()
 
