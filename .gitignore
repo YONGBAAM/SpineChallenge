@@ -1,6 +1,6 @@
 #all files will be ignored
-train_images/
-test_images/
+#train_images/
+#test_images/
 Old/
 plots/
 model/
