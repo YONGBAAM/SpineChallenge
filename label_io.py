@@ -11,8 +11,8 @@ from PIL import Image
 #
 ##############################
 
-def plot_image(image, coord_red = None, coord_gr = None, coord_cy = None,
-               line_red = None, line_gr = None, line_cy = None,
+def plot_image(image, coord_red = None, coord_gr = None, coord_bl = None,
+               line_red = None, line_gr = None, line_bl = None,
                segmap = None, ref_segmap = None, alpha = 0.3, off_scaling = False):
     #각각 coord들을 독립적으로 변경
 
@@ -45,11 +45,11 @@ def plot_image(image, coord_red = None, coord_gr = None, coord_cy = None,
             coord_gr = to_absolute(coord_gr)
         plt.scatter(coord_gr[:, 0], coord_gr[:, 1], s=1.2, c='green')
 
-    if coord_cy is not None:
-        coord_cy = np.copy(coord_cy.reshape(-1, 2))
-        if coord_cy.flatten()[0] < 1:
-            coord_cy = to_absolute(coord_cy)
-        plt.scatter(coord_cy[:, 0], coord_cy[:, 1], s=1.2, c='cyan')
+    if coord_bl is not None:
+        coord_bl = np.copy(coord_bl.reshape(-1, 2))
+        if coord_bl.flatten()[0] < 1:
+            coord_bl = to_absolute(coord_bl)
+        plt.scatter(coord_bl[:, 0], coord_bl[:, 1], s=1.2, c='blue')
 
     if line_red is not None:
         line = np.copy(line_red.reshape(-1, 2))
@@ -63,11 +63,11 @@ def plot_image(image, coord_red = None, coord_gr = None, coord_cy = None,
             line = to_absolute(line)
         plt.plot(line[:, 0], line[:, 1], color ='green', alpha = 0.5)
 
-    if line_cy is not None:
-        line = np.copy(line_cy.reshape(-1, 2))
+    if line_bl is not None:
+        line = np.copy(line_bl.reshape(-1, 2))
         if line.flatten()[0] <1:
             line = to_absolute(line)
-        plt.plot(line[:, 0], line[:, 1], color ='cyan', alpha = 0.5)
+        plt.plot(line[:, 0], line[:, 1], color ='blue', alpha = 0.5)
 
     plt.imshow(image)
 
@@ -171,12 +171,9 @@ def write_data_names(data_names, label_location):
     path = os.path.join(label_location, 'data_names.csv')
     pd.DataFrame(data_names).to_csv(path, header=False, index=False)
 
-def read_labels(label_location, relative = False, title = None):
+def read_labels(label_location, title = None):
     if title is None:
-        if relative == False:
-            title = 'labels'
-        else:
-            raise Exception('Do not save and load relative label')
+        title = 'labels'
 
     if title[-4:] != '.csv':
         title = title + '.csv'

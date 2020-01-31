@@ -90,9 +90,9 @@ def preprocessing():
 
 def prepare_label():
     # read matlab label and save to csv
-    image_location = './test_images'
-    label_location_mat = './test_labels_mat'
-    label_save_dest = './test_labels'
+    image_location = './train_images'
+    label_location_mat = './train_labels_mat'
+    label_save_dest = './train_labels_mat'
 
     label_path_all = os.listdir(label_location_mat)
 
@@ -129,6 +129,12 @@ def draw_seg(coord, H, W):
     return seg_image
 
 if __name__ == '__main__':
+    ####################
+    ####
+    ####    Check label order
+
+
+
     test_data_location = './test_images'
     test_label_location = './test_labels'
     test_labels = read_labels(test_label_location)
@@ -138,7 +144,8 @@ if __name__ == '__main__':
     train_data_location = './train_images'
     train_label_location = './train_labels'
 
-    train_labels = read_labels(train_label_location)
+    #train_labels = read_labels(train_label_location)
+    train_labels = read_labels(train_label_location, title = 'labels_m')
     train_data_names = read_data_names(train_label_location)
     train_images = read_images(train_data_location, train_data_names)
 

@@ -32,11 +32,9 @@ config = dict(num_epochs=6000, learning_rates=1e-5, save_every=50,
               is_lr_decay=True, lrdecay_thres=0.1, lrdecay_every=200, lrdecay_window = 50,
               model_save_dest="./model", dropout_prob=0.5
               )
-batch_size = 24
+batch_size = 48
 pad_mode = 'nopad' # pad or nopad
-config['model_name'] = 'renew_34'
-config['model_name'] += '_' + pad_mode
-
+config['model_name'] = 'TESTMODEL'
 ####    DataLoader
 loader_train = get_loader_train(tfm = pad_mode, batch_size=batch_size, shuffle=True)
 loader_val = get_loader_test(tfm = pad_mode, batch_size = 1, shuffle = False )
@@ -65,7 +63,17 @@ cl34 = nn.Sequential(*[#512 16 8 for 34
     nn.Linear(4096,136)
 
 ])
-model = LandmarkNet(resnet_dim=34, classifier = cl34, requires_grad=True).to(device)
+#model = LandmarkNet(resnet_dim=34, classifier = cl34, requires_grad=True).to(device)
+
+####    For testing
+model = nn.Sequential(*[
+    nn.Conv2d(1,16,3,padding = 1),
+    nn.ReLU(),
+    nn.AdaptiveAvgPool2d(8),
+    nn.Flatten(),
+    nn.Linear(8*8*16,136)
+])
+model.to(device)
 
 trainer = Trainer(model=model,
                   optimizer=torch.optim.Adam(model.parameters(), lr=config['learning_rates']),
@@ -75,9 +83,9 @@ trainer = Trainer(model=model,
 #trainer.test(test_loader=loader_val, load_model_name='NEW_TEST_ep4_tL1.65e+16_vL1.55e+00.tar')
 #trainer.load_model('renew_34_nopad_ep1999_tL2.79e-04_vL4.00e-04.tar', model_only = False)
 #trainer.load_model()
-trainer.test(test_loader = loader_val, load_model_name='renew_34_nopad_ep2100_tL2.74e-04_vL3.98e-04.tar',save_image=False)
+#trainer.test(test_loader = loader_val, load_model_name='renew_34_nopad_ep2100_tL2.74e-04_vL3.98e-04.tar',save_image=False)
 
-#trainer.train()
+trainer.train()
 
 
 
