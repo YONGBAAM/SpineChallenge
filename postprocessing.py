@@ -26,24 +26,7 @@ import warnings
 ###############################################
 
 
-def label_sort(labels):
-    #1st axis : 증가하는 axis가 0임 즉 column별로
-    labels_rev = np.copy(labels.reshape(-1,34,2,2))
 
-    label_list = []
-    for label in labels_rev:
-        left = label[:,0,:]
-        left = [c for c in left]
-        right = label[:,1,:]
-        right = [c for c in right]
-        left = sorted(left, key = lambda x:x[1])
-        right = sorted(right, key = lambda x:x[1])
-        left = np.array(left)
-        right = np.array(right)
-        label_list.append(np.concatenate([left, right], axis = 1))
-    labels_rev = np.array(label_list)
-    labels_rev = labels_rev.reshape(-1,136)
-    return labels_rev
 
 def calc_poli(x, coeffs):
     res = np.zeros_like(x)

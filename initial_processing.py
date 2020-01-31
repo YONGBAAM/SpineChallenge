@@ -11,7 +11,7 @@ from PIL import Image, ImageOps
 import scipy.io as spio
 import pandas as pd
 
-from label_io import write_labels, write_data_names, read_labels, read_data_names, plot_image
+from label_io import write_labels, write_data_names, read_labels, read_data_names, plot_image, read_images
 
 
 ##############################
@@ -88,6 +88,42 @@ def preprocessing():
     # write_labels(label_rev_all, location = label_dest_resized)
     # write_data_names(data_names, location = label_dest_resized)
 
+def label_sort_x(labels):
+    labels = labels.reshape(-1,34,2,2)
+    for label in labels:
+        for i in range(34):
+            #   if not left coord x < right coord x
+            if not label[i][0][0] <= label[i][1][0]:
+                tmp = label[i][1].copy()
+                label[i][1] = label[i][0].copy()
+                label[i][0] = tmp
+    return labels.reshape(-1,136)
+
+def label_sort_y(labels):
+    #1st axis : 증가하는 axis가 0임 즉 column별로
+    labels_rev = np.copy(labels.reshape(-1,34,2,2))
+
+    label_list = []
+    #y sort
+    for label in labels_rev:
+        left = label[:,0,:]
+        left = [c for c in left]
+        right = label[:,1,:]
+        right = [c for c in right]
+        left = sorted(left, key = lambda x:x[1])
+        right = sorted(right, key = lambda x:x[1])
+        left = np.array(left)
+        right = np.array(right)
+        label_list.append(np.concatenate([left, right], axis = 1))
+    labels_rev = np.array(label_list)
+    labels_rev = labels_rev.reshape(-1,136)
+    return labels_rev
+
+def label_sort(labels):
+    labels = label_sort_x(labels)
+    labels = label_sort_y(labels)
+    labels = label_sort_x(labels)
+    return labels
 
 def prepare_label():
     # read matlab label and save to csv
@@ -115,7 +151,6 @@ def prepare_label():
         H, W = np_image.shape
         labels.append(coord.flatten())
 
-    from postprocessing import label_sort
     labels = np.array(labels)
     labels = label_sort(labels)
     write_labels(labels, label_location=label_save_dest)
@@ -129,3 +164,71 @@ def draw_seg(coord, H, W):
     seg_image[rr, cc, :] = 1
     seg_image = seg_image[:, :, 0]
     return seg_image
+
+if __name__ == '__main__':
+    test_data_location = './test_images'
+    test_label_location = './test_labels'
+    test_labels = read_labels(test_label_location)
+    test_data_names = read_data_names(test_label_location)
+    test_images = read_images(test_data_location, test_data_names)
+
+    train_data_location = './train_images'
+    train_label_location = './train_labels'
+
+    train_labels = read_labels(train_label_location)
+    train_data_names = read_data_names(train_label_location)
+    train_images = read_images(train_data_location, train_data_names)
+
+    # train_labels_nosort = read_labels(train_label_location, title = 'labels_nosort')
+    # train_labels[1] = train_labels_nosort[1]
+    # train_labels[75] = train_labels_nosort[75]
+    #
+    # write_labels(train_labels, label_location= train_label_location, title = 'labels_finver')
+
+
+    error_datas = []
+    #label 유효성 검사
+    for ind, image in enumerate(test_images):
+        gt = test_labels[ind]
+
+        ##label 유효성 검사
+        gt = gt.reshape(34,2,2)
+        mask = np.zeros_like(gt)
+
+        is_error = False
+        #left x < right x
+        for i in range(34):
+            if not gt[i,0,0] <= gt[i,1,0]:
+                is_error = True
+                mask[i,0,:] = 1
+                mask[i,1,:] = 1
+                print('{} : left right '.format(ind))
+
+        #top y < bot y (matrix coordinate)
+        for i in range(33):
+            if not gt[i,0,1] <= gt[i+1,0,1]:
+                mask[i,0,:] = 1
+                mask[i+1,0,:] = 1
+                is_error = True
+                print('{} : top bot for left '.format(ind))
+            if not gt[i,1,1] <= gt[i+1,1,1]:
+                mask[i, 1, :] = 1
+                mask[i + 1, 1, :] = 1
+                is_error = True
+                print('{} : top bot for right '.format(ind))
+
+
+
+        if is_error:
+            notmask = np.ones_like(gt) - mask
+            gt_m = gt * notmask + np.ones_like(gt)
+            gt_error = gt*mask + np.ones_like(gt)
+
+            plt.figure()
+            plt.title('ind : {}'.format(ind))
+
+            plot_image(image, coord_red=gt_m.flatten(), coord_gr = gt_error.flatten())
+            plt.show()
+        # plt.figure()
+        # plot_image(image, coord_red=gt[:,0,:].flatten(), coord_gr= gt[:,1,:].flatten())
+        # plt.show()

@@ -1,9 +1,9 @@
-
 import numpy as np
 import matplotlib.pyplot as plt
 import os
 import pandas as pd
 import warnings
+from PIL import Image
 
 #############################
 #
@@ -116,6 +116,14 @@ def to_absolute(label, H = 512, W = 256):
     abs_label = abs_label.flatten() * factor
     abs_label = abs_label.reshape(shape).astype(int)
     return abs_label
+
+def read_images(data_location, data_names):
+    image_list = []
+    for data_name in data_names:
+        im = Image.open(os.path.join(data_location, data_name))
+        im = np.asarray(im)
+        image_list.append(im)
+    return image_list
 
 def read_data_names(label_location):
     path = os.path.join(label_location, 'data_names.csv')

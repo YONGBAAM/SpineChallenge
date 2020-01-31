@@ -308,7 +308,7 @@ if __name__ == '__main__':
     _imgs = _train_data['image']
     _labels = _train_data['label']
     _imgs = _imgs.repeat((1,3,1,1))
-    ext = get_feature_extractor(resnet_dim=34)
+    ext = torchvision.models.resnet
     out = ext(_imgs)
     print(out.shape)
     #512 256은 8 2048 16 8 나옴
