@@ -320,7 +320,7 @@ class Trainer():
     def _lrdeday(self):
         for param_group in self.optimizer.param_groups:
             lr = param_group['lr']
-        lr = lr/3
+        lr = lr/1.58
         self.learning_rates = lr
         if type(self.optimizer) == type(torch.optim.Adam(self.model.parameters(), lr=0.001)):
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rates)
@@ -328,6 +328,7 @@ class Trainer():
             self.optimizer = torch.optim.RMSprop(self.model.parameters(), lr=self.learning_rates)
         self.last_lrdecay = self.current_ep
         self.update_log('lr decayed to %.2e' % (self.learning_rates))
+        print('lr decayed to %.e2'%(lr))
 
 
     def lr_decay(self):
@@ -347,7 +348,7 @@ class Trainer():
             current_delta = np.abs(current_delta)/current_average
             current_mask = current_delta>self.lrdecay_thres
 
-            oscilliate = current_mask > 0.5*self.lrdecay_window
+            oscilliate = np.sum(current_mask) > 0.5*self.lrdecay_window
 
             if not_decay or oscilliate:
                 self._lrdeday()
