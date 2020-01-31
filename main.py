@@ -73,11 +73,11 @@ trainer = Trainer(model=model,
 
 
 #trainer.test(test_loader=loader_val, load_model_name='NEW_TEST_ep4_tL1.65e+16_vL1.55e+00.tar')
-trainer.load_model('renew_34_nopad_ep1999_tL2.79e-04_vL4.00e-04.tar', model_only = False)
+#trainer.load_model('renew_34_nopad_ep1999_tL2.79e-04_vL4.00e-04.tar', model_only = False)
 #trainer.load_model()
-trainer.optimizer = torch.optim.Adam(model.parameters(), lr = 3e-9)
+trainer.test(test_loader = loader_val, load_model_name='renew_34_nopad_ep2100_tL2.74e-04_vL3.98e-04.tar',save_image=False)
 
-trainer.train()
+#trainer.train()
 
 
 

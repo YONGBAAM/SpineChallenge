@@ -86,6 +86,42 @@ def plot_image(image, coord_red = None, coord_gr = None, coord_cy = None,
             plt.imshow(image * (1 - 2 * alpha) + segmap * alpha + ref_segmap * alpha)
         else:
             plt.imshow(image * (1 - alpha) + segmap * alpha)
+def label_sort_x(labels):
+    labels = labels.reshape(-1,34,2,2)
+    for label in labels:
+        for i in range(34):
+            #   if not left coord x < right coord x
+            if not label[i][0][0] <= label[i][1][0]:
+                tmp = label[i][1].copy()
+                label[i][1] = label[i][0].copy()
+                label[i][0] = tmp
+    return labels.reshape(-1,136)
+
+def label_sort_y(labels):
+    #1st axis : 증가하는 axis가 0임 즉 column별로
+    labels_rev = np.copy(labels.reshape(-1,34,2,2))
+
+    label_list = []
+    #y sort
+    for label in labels_rev:
+        left = label[:,0,:]
+        left = [c for c in left]
+        right = label[:,1,:]
+        right = [c for c in right]
+        left = sorted(left, key = lambda x:x[1])
+        right = sorted(right, key = lambda x:x[1])
+        left = np.array(left)
+        right = np.array(right)
+        label_list.append(np.concatenate([left, right], axis = 1))
+    labels_rev = np.array(label_list)
+    labels_rev = labels_rev.reshape(-1,136)
+    return labels_rev
+
+def label_sort(labels):
+    labels = label_sort_x(labels)
+    labels = label_sort_y(labels)
+    labels = label_sort_x(labels)
+    return labels
 
 def to_relative(label, H = 512, W = 256):
     #labels인지 label인지
@@ -121,7 +157,7 @@ def read_images(data_location, data_names):
     image_list = []
     for data_name in data_names:
         im = Image.open(os.path.join(data_location, data_name))
-        im = np.asarray(im)
+        im = hwc(np.asarray(im))
         image_list.append(im)
     return image_list
 

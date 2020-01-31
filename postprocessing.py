@@ -3,8 +3,8 @@ import os
 from label_io import read_data_names, read_labels, chw, hwc, write_labels
 import matplotlib.pyplot as plt
 import pandas as pd
-from label_io import to_absolute, to_relative, plot_image
-from calc import calc_angle, _get_angle
+from label_io import to_absolute, to_relative, plot_image, label_sort, read_images
+from calc_old import calc_angle, _get_angle
 try:
     import accimage
 except ImportError:
@@ -24,15 +24,11 @@ import warnings
 #
 #   정리는 더 안해도 된다.
 ###############################################
-
-
-
-
 def calc_poli(x, coeffs):
     res = np.zeros_like(x)
     for coeff in coeffs:
         res *= x
-        res += coeff
+        res = res + coeff
     return res
 
 def label_fit(label,degree, full = False):
@@ -59,108 +55,114 @@ def derivative_poli(coeff):
             degree -=1
     return der
 
-def post_way1(pred_path, loader_test):
+#with predicted coordinate
+def post_way1(pred_path, images, labels_gt_abs):
     #pred_path = './model/RH_SM_all_ep1999'
-    preds = label_sort(read_labels(location = pred_path))
 
-    #all processing is relative
-    #preds = to_relative(preds)
+    ####    Get ablsolute prediction
+    if not os.path.exists(os.path.join(pred_path, 'labels_pred_abs.csv')):
+        #make abs label
+        preds_rel = read_labels(pred_path, title = 'labels_pred_rel')
+        preds = []
+        for ind, pred_rel in enumerate(preds_rel):
+            img = images[ind]
+            H,W,_ = img.shape
+            pred_abs = to_absolute(label = pred_rel, H = H, W = W)
+            preds.append(pred_abs)
+        preds = np.asarray(preds)
+        write_labels(preds, label_location=pred_path, title = 'labels_pred_abs')
+    else:
+        preds = read_labels(pred_path, title = 'labels_pred_abs')
 
+    gts = labels_gt_abs
     fit_degree = 6
 
-    ind = -1
+
     processing_log = []
-    for val_data in loader_test:
-        imgs = val_data['image'].cpu().numpy()  # for batch size 1
-        gts = val_data['label'].cpu().numpy()
-        for i, img in enumerate(imgs):
-            ind += 1
-            gt = gts[i]
-            H, W = 512, 256
+    for ind, img in enumerate(images):
+        H,W,C = img.shape
+        gt = gts[ind]
+        pred = preds[ind]
+        pred = pred.reshape(34, 2, 2)
 
-            pred = preds[ind]
-            pred = pred.reshape(34, 2, 2)
+        ########################################################
+        #
+        #   Left fit과 right fit 만들고 왼쪽 오른쪽 각각에 대해
+        #   landmark 구하기
+        #   해당 랜드마크 가지고 angle prediction
+        #
+        #
+        #
+        #
+        ########################################################
 
-            ########################################################
-            #
-            #   Left fit과 right fit 만들고 왼쪽 오른쪽 각각에 대해
-            #   landmark 구하기
-            #   해당 랜드마크 가지고 angle prediction
-            #
-            #
-            #
-            #
-            ########################################################
+        left = pred[:, 0, :]
+        left_fit, coeff_l = label_fit(left, fit_degree, full=True)
 
-            left = pred[:, 0, :].reshape(-1, 2)
-            left_fit, coeff_l = label_fit(left, fit_degree, full=True)
+        right = pred[:, 1, :]
+        right_fit, coeff_r = label_fit(right, fit_degree, full=True)
 
-            right = pred[:, 1, :].reshape(-1, 2)
-            right_fit, coeff_r = label_fit(right, fit_degree, full=True)
+        fitted_pred = np.concatenate((left_fit.reshape(-1, 1, 2), right_fit.reshape(-1, 1, 2))
+                                     , axis=1)
+        fitted_pred = fitted_pred.flatten().astype(int)
 
-            fitted_pred = np.concatenate((left_fit.reshape(-1, 1, 2), right_fit.reshape(-1, 1, 2))
-                                         , axis=1)
-            fitted_pred = fitted_pred.flatten()
-            pred = pred.flatten()
+        angles_g, pos_g, _, mid_lines_g, _ = calc_angle(gt, image_size =(H,W))
+        angles_p, pos_p, _, mid_lines_p, _ = calc_angle(fitted_pred, (H, W))
 
-            angles_g, pos_g, _, mid_lines_g, _ = calc_angle(gt, (1, 1))
-            angles_p, pos_p, _, mid_lines_p, _ = calc_angle(fitted_pred, (1, 1))
+        angles_g = angles_g[0]
+        angles_p = angles_p[0]
 
-            angles_g = angles_g[0]
-            angles_p = angles_p[0]
+        angle_err = np.abs(angles_g - angles_p) / angles_g
 
-            angle_err = np.abs(angles_g - angles_p) / angles_g
+        pos_g = pos_g[0:2]
+        pos_p = pos_p[0:2]
 
-            pos_g = pos_g[0:2]
-            pos_p = pos_p[0:2]
+        # right = np.tile(lab[:,1,:].expand_dims(1), (1,2,1))
+        plt.figure()
 
-            # right = np.tile(lab[:,1,:].expand_dims(1), (1,2,1))
-            C, H, W = img.shape
-            plt.figure()
+        for pos in pos_g:
+            plt.plot(mid_lines_g[2 * pos:2 * pos + 2, 0] * W, mid_lines_g[2 * pos:2 * pos + 2, 1] * H, 'g')
+        for pos in pos_p:
+            plt.plot(mid_lines_p[2 * pos:2 * pos + 2, 0] * W, mid_lines_p[2 * pos:2 * pos + 2, 1] * H, 'r')
 
-            for pos in pos_g:
-                plt.plot(mid_lines_g[2 * pos:2 * pos + 2, 0] * W, mid_lines_g[2 * pos:2 * pos + 2, 1] * H, 'g')
-            for pos in pos_p:
-                plt.plot(mid_lines_p[2 * pos:2 * pos + 2, 0] * W, mid_lines_p[2 * pos:2 * pos + 2, 1] * H, 'r')
+        # fit line 추가
+        d = 1
+        pred = pred.reshape(34, 2, 2)
+        minyl = pred[0, 0, 1]
+        minyr = pred[0, 1, 1]
+        maxyl = pred[33, 0, 1]
+        maxyr = pred[33, 1, 1]
+        left_r = np.arange(minyl, maxyl, d)
+        right_r = np.arange(minyr, maxyr, d)
+        left_c = calc_poli(left_r, coeff_l)
+        right_c = calc_poli(right_r, coeff_r)
+        left_line = np.concatenate((left_c.reshape(-1, 1), left_r.reshape(-1, 1)), axis=1)
+        right_line = np.concatenate((right_c.reshape(-1, 1), right_r.reshape(-1, 1)), axis=1)
 
-            # fit line 추가
-            d = 1 / 512
-            pred = pred.reshape(34, 2, 2)
-            minyl = pred[0, 0, 1]
-            minyr = pred[0, 1, 1]
-            maxyl = pred[33, 0, 1]
-            maxyr = pred[33, 1, 1]
-            left_r = np.arange(minyl, maxyl, d)
-            right_r = np.arange(minyr, maxyr, d)
-            left_c = calc_poli(left_r, coeff_l)
-            right_c = calc_poli(right_r, coeff_r)
-            left_line = np.concatenate((left_c.reshape(-1, 1), left_r.reshape(-1, 1)), axis=1)
-            right_line = np.concatenate((right_c.reshape(-1, 1), right_r.reshape(-1, 1)), axis=1)
+        plt.plot(left_line[:, 0], left_line[:, 1], color='magenta', alpha=0.3)
+        plt.plot(right_line[:, 0], right_line[:, 1], color='magenta', alpha=0.3)
 
-            plt.plot(left_line[:, 0] * W, left_line[:, 1] * H, color='magenta', alpha=0.5)
-            plt.plot(right_line[:, 0] * W, right_line[:, 1] * H, color='magenta', alpha=0.5)
+        plot_image(img, coord_red=fitted_pred, coord_gr=gt)
 
-            plot_image(img, coord_red=fitted_pred, coord_gr=gt, coord_cy=pred)
+        # fit line 윤곽추가 맨윗좌표~맨아랫좌표
+        title = 'GT%.1f %d %d PR%.1f %d %d ER%.1f%% ' % (angles_g, pos_g[0], pos_g[1],
+                                                         angles_p, pos_p[0], pos_p[1], angle_err * 100)
+        plt.title('{}_R:PRED, G:GT'.format(ind) + '\n' + title)
+        #plt.show()
+        save_name = 'way1_{}'.format(ind)
+        plt.savefig(os.path.join(pred_path, save_name + '.jpg'))
+        plt.close()
 
-            # fit line 윤곽추가 맨윗좌표~맨아랫좌표
-            title = 'GT%.1f %d %d PR%.1f %d %d ER%.1f%% ' % (angles_g, pos_g[0], pos_g[1],
-                                                             angles_p, pos_p[0], pos_p[1], angle_err * 100)
-            plt.title('{}_R:PRED, G:GT'.format(ind) + '\n' + title)
-            # plt.show()
-            save_name = 'way1_{}'.format(ind)
-            plt.savefig(os.path.join(pred_path, save_name + '.jpg'))
-            plt.close()
+        processing_log.append(dict(
+            pos_GT0=pos_g[0], pos_GT1=pos_g[1], pos_PR0=pos_p[0], pos_PR1=pos_p[1],
+            angles_g=angles_g, angles_p=angles_p, err=angle_err
+        ))
 
-            processing_log.append(dict(
-                pos_GT0=pos_g[0], pos_GT1=pos_g[1], pos_PR0=pos_p[0], pos_PR1=pos_p[1],
-                angles_g=angles_g, angles_p=angles_p, err=angle_err
-            ))
-
-            ########################################################
-            #
-            #   Left fit과 right fit의 중점을 midpoint curve라고 생각하기
-            #
-            ########################################################
+        ########################################################
+        #
+        #   Left fit과 right fit의 중점을 midpoint curve라고 생각하기
+        #
+        ########################################################
     df = pd.DataFrame(processing_log)
     df.to_csv(os.path.join(pred_path, save_name + '.csv'))
 
@@ -298,5 +300,12 @@ def post_way2(pred_path, loader_test):
     df = pd.DataFrame(processing_log)
     df.to_csv(os.path.join(pred_path, save_name + '.csv'))
 
+if __name__ == '__main__':
+    test_label_location = './test_labels'
+    test_data_location = './test_images'
+    test_data_names = read_data_names(test_label_location)
+    test_labels = read_labels(test_label_location)
+    test_images = read_images(test_data_location, test_data_names)
 
-
+    pred_path = './model/renew_34_nopad_ep2100'
+    post_way1(pred_path=pred_path, images = test_images, labels_gt_abs= test_labels)

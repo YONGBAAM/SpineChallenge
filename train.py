@@ -140,7 +140,6 @@ class Trainer():
                 title = title + '.model'
             torch.save(self.model.state_dict(), os.path.join(self.model_save_dest, title))
         else:
-            print('Saving current_ep, model, and optimizer')
             save_dict = dict(current_ep = self.current_ep, model = self.model.state_dict(),
                              optimizer = self.optimizer.state_dict())
             if not title[-4:] == '.tar':
@@ -239,7 +238,7 @@ class Trainer():
 
         return val_losses
 
-    def test(self, test_loader = None, load_model_name = None, title = None):
+    def test(self, test_loader = None, load_model_name = None, title = None, save_image = False):
 
         ##Getting save path and model load
         if load_model_name is not None:
@@ -249,7 +248,7 @@ class Trainer():
             folder = folder[:-1]
             ep_no = load_model_name.split('ep')[1].split('_')[0]
             result_save_path = up_path + '/' + folder + '_ep' + ep_no
-            self.load_model(load_model_name, model_only= False)
+            self.load_model(load_model_name)
         else:
             #no load, existing model
             result_save_path = self.model_save_dest
@@ -286,16 +285,17 @@ class Trainer():
             title = folder + '_ep' + ep_no + '_t'
 
         #save image result for test
-        for ind in range(imgs.shape[0]):
-            plt.figure()
-            plot_image(imgs[ind], coord_red=true_labels[ind], coord_gr=test_labels[ind])
-            plt.title(title + '_{}'.format(ind))
-            plt.savefig(os.path.join(result_save_path, title + '_{}.png'.format(ind)))
-            plt.close()
+        if save_image:
+            for ind in range(imgs.shape[0]):
+                plt.figure()
+                plot_image(imgs[ind], coord_red=true_labels[ind], coord_gr=test_labels[ind])
+                plt.title(title + '_{}'.format(ind))
+                plt.savefig(os.path.join(result_save_path, title + '_{}.png'.format(ind)))
+                plt.close()
 
         #save absolute label result
         test_labels = test_labels.reshape(-1,136)
-        write_labels(test_labels, result_save_path, title = 'labels_pred')
+        write_labels(test_labels, result_save_path, title = 'labels_pred_rel')
 
         print('test MSE loss %.2e'%(np.average(test_losses)))
         return test_losses
@@ -319,6 +319,7 @@ class Trainer():
 
 
     def lr_decay(self):
+        ##_lrdecay 정의하기
         current_ep = self.current_ep
         if current_ep > self.lrdecay_every + self.last_lrdecay or self.testmode:
             window = self.lrdecay_window
