@@ -66,14 +66,14 @@ cl34 = nn.Sequential(*[#512 16 8 for 34
 #model = LandmarkNet(resnet_dim=34, classifier = cl34, requires_grad=True).to(device)
 
 ####    For testing
-model = nn.Sequential(*[
-    nn.Conv2d(1,16,3,padding = 1),
-    nn.ReLU(),
-    nn.AdaptiveAvgPool2d(8),
-    nn.Flatten(),
-    nn.Linear(8*8*16,136)
-])
-model.to(device)
+# model = nn.Sequential(*[
+#     nn.Conv2d(1,16,3,padding = 1),
+#     nn.ReLU(),
+#     nn.AdaptiveAvgPool2d(8),
+#     nn.Flatten(),
+#     nn.Linear(8*8*16,136)
+# ])
+# model.to(device)
 
 trainer = Trainer(model=model,
                   optimizer=torch.optim.Adam(model.parameters(), lr=config['learning_rates']),

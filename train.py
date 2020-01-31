@@ -37,7 +37,7 @@ class Trainer():
         self.is_lr_decay = kwargs.get('is_lr_decay', False)
         self.lrdecay_every = kwargs.get('lrdecay_every', 500)
         self.lrdecay_window = kwargs.get('lrdecay_window', 50)
-        self.last_lrdecay = self.start_ep
+        self.last_lrdecay = -200
 
         self.dropout_prob = kwargs.get('dropout_prob', 0)
 
@@ -317,32 +317,43 @@ class Trainer():
             for line in self.log:
                 f.write(line[0] +'\t' +  line[1] + '\n')
 
+    def _lrdeday(self):
+        for param_group in self.optimizer.param_groups:
+            lr = param_group['lr']
+        lr = lr/1.58
+        self.learning_rates = lr
+        if type(self.optimizer) == type(torch.optim.Adam(self.model.parameters(), lr=0.001)):
+            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rates)
+        elif type(self.optimizer) == type(torch.optim.RMSprop(self.model.parameters(), lr=self.learning_rates)):
+            self.optimizer = torch.optim.RMSprop(self.model.parameters(), lr=self.learning_rates)
+        self.last_lrdecay = self.current_ep
+        self.update_log('lr decayed to %.2e' % (self.learning_rates))
+
 
     def lr_decay(self):
         ##_lrdecay 정의하기
-        current_ep = self.current_ep
-        if current_ep > self.lrdecay_every + self.last_lrdecay or self.testmode:
-            window = self.lrdecay_window
-            before_average = np.average(self.loss_list[current_ep -1 - self.save_every:
-                                        current_ep -1 - self.save_every + window])
-            recent_loss = np.array(self.loss_list[current_ep-window:current_ep])
-            diff = np.abs(recent_loss - before_average)/before_average
-            more_change = diff > self.lrdecay_thres
+        if self.current_ep > self.lrdecay_every + self.last_lrdecay and len(self.loss_list) > 2.5*self.lrdecay_window:
+            loss_array = np.asarray(self.loss_list)
+            before_loss = loss_array[self.current_ep - self.lrdecay_window*2:self.current_ep-self.lrdecay_window]
+            current_loss = loss_array[self.current_ep - self.lrdecay_window:self.current_ep]
+            before_average = np.average(before_loss)
+            current_average = np.average(current_loss)
 
-            if sum(more_change) ==0 or self.testmode:#no change
-                self.learning_rates /= 3
-                if type(self.optimizer) == type(torch.optim.Adam(self.model.parameters(), lr = 0.001)):
-                    self.optimizer = torch.optim.Adam(self.model.parameters(), lr = self.learning_rates)
-                elif type(self.optimizer) == type(torch.optim.RMSprop(self.model.parameters(), lr = self.learning_rates)):
-                    self.optimizer = torch.optim.RMSprop(self.model.parameters(), lr = self.learning_rates)
-                # for param_group in self.optimizer.param_groups:
-                #     param_group['lr'] /= 1.58 #pow(10,0.333)
+            current_decay = (current_loss - before_average)/before_average
+            decay_mask = current_decay < -self.lrdecay_thres
+            not_decay = np.sum(decay_mask) < 0.1*self.lrdecay_window
 
-                self.last_lrdecay = current_ep
-                print('lr decayed')
-                self.update_log('lr decayed to %.2e'%(self.learning_rates))
+            current_delta = np.asarray([current_loss[i] - current_loss[i-1] for i in range(1,len(current_loss))])
+            current_delta = np.abs(current_delta)/current_average
+            current_mask = current_delta>self.lrdecay_thres
+
+            oscilliate = current_mask > 0.5*self.lrdecay_window
+
+            if not_decay or oscilliate:
+                self._lrdeday()
                 return True
-            else:return False
+            else:
+                return False
         else:return False
 
 
@@ -391,9 +402,41 @@ class MetricTracker(object):
         return np.average(self.items)
 
 
-
-
-
-
-
 '''
+if __name__ == '__main__':
+    import pandas as pd
+    df = pd.read_csv('./101_swallow_0.5_all_ep1150.csv')
+    vl = df['t_loss']
+    vl = np.asarray(vl)
+    print(len(vl))
+    window = 50
+    lrdecay_window = window
+    lrdecay_thres = 0.1
+
+
+    for current_ep in range(len(vl)):
+        loss_list = vl[:current_ep]
+        if len(loss_list) > 2.5 * window:
+            loss_array = np.asarray(loss_list)
+            before_loss = loss_array[current_ep - lrdecay_window * 2:current_ep - lrdecay_window]
+            current_loss = loss_array[current_ep - lrdecay_window:current_ep]
+            before_average = np.average(before_loss)
+            current_average = np.average(current_loss)
+
+            current_decay = (current_loss - before_average) / before_average
+            decay_mask = current_decay < -lrdecay_thres
+            not_decay = np.sum(decay_mask) < 0.1* lrdecay_window
+
+            current_delta = np.asarray([current_loss[i] - current_loss[i - 1] for i in range(1, len(current_loss))])
+            current_delta = np.abs(current_delta) / current_average
+            current_mask = current_delta > lrdecay_thres
+
+            oscilliate = np.sum(current_mask) > 0.5* lrdecay_window
+
+            if oscilliate:
+                print('{} oscilliate'.format(current_ep, oscilliate))
+
+            if not_decay:
+                print('{} notdecay'.format(current_ep, not_decay))
+
+
