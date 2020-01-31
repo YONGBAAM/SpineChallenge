@@ -320,7 +320,7 @@ class Trainer():
     def _lrdeday(self):
         for param_group in self.optimizer.param_groups:
             lr = param_group['lr']
-        lr = lr/1.58
+        lr = lr/3
         self.learning_rates = lr
         if type(self.optimizer) == type(torch.optim.Adam(self.model.parameters(), lr=0.001)):
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rates)
