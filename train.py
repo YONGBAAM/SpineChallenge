@@ -159,14 +159,10 @@ class Trainer():
                 self.learning_rates = param_group['lr']
 
     #latest model load?
-    def load_model(self, title, model_only = None):
-        if model_only == None:
-            if title[-6:] == '.model':
-                model_only = True
-            elif title[-4:] == '.tar':
-                model_only = False
-            else:
-                model_only = True
+    def load_model(self, title, model_only = False):
+        if model_only == False:
+            if not title[-4:] == '.tar':
+                title = title + '.tar'
 
         #get model_load_path
         #절대경로 모드
@@ -328,21 +324,23 @@ class Trainer():
             self.optimizer = torch.optim.RMSprop(self.model.parameters(), lr=self.learning_rates)
         self.last_lrdecay = self.current_ep
         self.update_log('lr decayed to %.2e' % (self.learning_rates))
-        print('lr decayed to %.e2'%(lr))
+        print('lr decayed to %.2e' % (self.learning_rates))
 
 
     def lr_decay(self):
         ##_lrdecay 정의하기
         if self.current_ep > self.lrdecay_every + self.last_lrdecay and len(self.loss_list) > 2.5*self.lrdecay_window:
+
             loss_array = np.asarray(self.loss_list)
-            before_loss = loss_array[self.current_ep - self.lrdecay_window*2:self.current_ep-self.lrdecay_window]
-            current_loss = loss_array[self.current_ep - self.lrdecay_window:self.current_ep]
+            before_loss = loss_array[loss_array.size - self.lrdecay_window*2:loss_array.size-self.lrdecay_window]
+            current_loss = loss_array[loss_array.size - self.lrdecay_window:loss_array.size]
             before_average = np.average(before_loss)
             current_average = np.average(current_loss)
 
             current_decay = (current_loss - before_average)/before_average
             decay_mask = current_decay < -self.lrdecay_thres
             not_decay = np.sum(decay_mask) < 0.1*self.lrdecay_window
+
 
             current_delta = np.asarray([current_loss[i] - current_loss[i-1] for i in range(1,len(current_loss))])
             current_delta = np.abs(current_delta)/current_average
@@ -351,6 +349,8 @@ class Trainer():
             oscilliate = np.sum(current_mask) > 0.5*self.lrdecay_window
 
             if not_decay or oscilliate:
+                print(decay_mask.shape)
+                print(current_mask.shape)
                 self._lrdeday()
                 return True
             else:
