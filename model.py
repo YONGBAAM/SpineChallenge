@@ -21,9 +21,11 @@ def get_feature_extractor(resnet_dim = 101, requires_grad = False, PoolDrop = Tr
 
     for param in resnet_based.parameters():
         param.requires_grad = requires_grad
+
     if PoolDrop:
         fe = nn.Sequential(*list(resnet_based.children())[:-2])
     else:
+        fe = nn.Sequential(*list(resnet_based.children())[:-1])
         print('Resnet does not drop pool layer')
 
     return fe
@@ -97,6 +99,7 @@ class LandmarkNet(nn.Module):
             else:
                 self.classifier = classifier
         else:#Legacy
+            self.classifier = classifier
             print('Do not use it')
 
     def forward(self, x):

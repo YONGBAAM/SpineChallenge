@@ -249,6 +249,9 @@ class Trainer():
             #no load, existing model
             result_save_path = self.model_save_dest
 
+        if test_loader is None:
+            test_loader = self.loader_val
+
         if not os.path.exists(result_save_path):
             os.makedirs(result_save_path)
         print('Save Relative labels in {}'.format(result_save_path))
@@ -278,7 +281,7 @@ class Trainer():
         true_labels = np.concatenate(true_labels, axis=0)
 
         if title is None:
-            title = folder + '_ep' + ep_no + '_t'
+            title = 'test'
 
         #save image result for test
         if save_image:
