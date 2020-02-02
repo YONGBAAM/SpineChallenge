@@ -93,6 +93,8 @@ def get_loader_train_val(tfm_train = 'nopad', tfm_val = 'nopad', batch_size_tr=6
             tfm = UNF
         elif tfm.lower() == 'nopad':
             tfm = NOPAD
+        elif tfm.lower() == 'rhp':
+            tfm = RHP
         else:
             tfm = None
     tfm_train = tfm

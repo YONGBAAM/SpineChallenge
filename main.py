@@ -80,8 +80,8 @@ trainer = Trainer(model=model,
                   loader_train = loader_train, loader_val = loader_val, criterion = nn.SmoothL1Loss(), **config)
 
 #trainer.test(test_loader=loader_val, load_model_name='NEW_TEST_ep4_tL1.65e+16_vL1.55e+00.tar')
-trainer.load_model('101_Fin_Grad_ep954_tL7.79e-04_vL4.20e-04.tar', model_only = False)
-#trainer.optimizer=torch.optim.Adam(model.parameters(), lr=config['learning_rates'])
+trainer.load_model('101_Fin_Grad_ep1498_tL7.70e-04_vL3.81e-04', model_only = False)
+#trainer.optimizer=torch.optim.Adam(model.parameters(), lr=1e-6)
 #trainer.test(test_loader = loader_val, load_model_name='renew_34_nopad_ep2100_tL2.74e-04_vL3.98e-04.tar',save_image=False)
 trainer.train()
 
