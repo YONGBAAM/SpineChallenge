@@ -56,6 +56,29 @@ def derivative_poli(coeff):
             degree -=1
     return der
 
+from sklearn.metrics import r2_score
+def determine_degree(true_labels):
+    true_labels = true_labels.reshape(-1,34,2,2).copy()
+    result_list = []
+    for fit_degree in range(3,9):
+        r2 = 0
+        for label in true_labels:
+            left = label[:, 0, :]
+            left_fit, coeff_l = label_fit(left, fit_degree, full=True)
+            left_fit_x = left_fit.reshape(-1,2)[:,0]
+            left_ori_x = left.reshape(-1,2)[:,0]
+            r2_l = r2_score(left_fit_x, left_ori_x)
+
+            right = label[:, 1, :]
+            right_fit, coeff_r = label_fit(right, fit_degree, full=True)
+            right_fit_x = right_fit.reshape(-1,2)[:,0]
+            right_ori_x = right.reshape(-1, 2)[:, 0]
+            r2_r = r2_score(right_fit_x, right_ori_x)
+            r2 += r2_l + r2_r
+        result_list.append(dict(deg = fit_degree, r2 = r2))
+    print(result_list)
+
+
 #with predicted coordinate
 #integrating
 def post_way1(label_pred_abs, degree = 6, full = False):
@@ -82,27 +105,6 @@ def post_way1(label_pred_abs, degree = 6, full = False):
                                   , axis=1)
     fitted_preds = fitted_preds.flatten().astype(int)
 
-    #####################
-    #   여기부턴 밖에서 하기
-    # angles_g, pos_g, _, mid_lines_g, _ = calc_angle(gt, image_size =(H,W))
-    # angles_p, pos_p, _, mid_lines_p, _ = calc_angle(fitted_pred, (H, W))
-    #
-    # angles_g = angles_g[0]
-    # angles_p = angles_p[0]
-    #
-    # angle_err = np.abs(angles_g - angles_p) / angles_g
-    #
-    # pos_g = pos_g[0:2]
-    # pos_p = pos_p[0:2]
-    #
-    # # right = np.tile(lab[:,1,:].expand_dims(1), (1,2,1))
-    # plt.figure()
-    #
-    # for pos in pos_g:
-    #     plt.plot(mid_lines_g[2 * pos:2 * pos + 2, 0] * W, mid_lines_g[2 * pos:2 * pos + 2, 1] * H, 'g')
-    # for pos in pos_p:
-    #     plt.plot(mid_lines_p[2 * pos:2 * pos + 2, 0] * W, mid_lines_p[2 * pos:2 * pos + 2, 1] * H, 'r')
-
     # fit line 추가
     d = 1
     pred = pred.reshape(34, 2, 2)
@@ -128,39 +130,6 @@ def post_way1(label_pred_abs, degree = 6, full = False):
     else:
         return fitted_preds
 
-        # plt.plot(left_line[:, 0], left_line[:, 1], color='magenta', alpha=0.3)
-        # plt.plot(right_line[:, 0], right_line[:, 1], color='magenta', alpha=0.3)
-
-        # plot_image(img, coord_red=fitted_pred, coord_gr=gt)
-
-        # fit line 윤곽추가 맨윗좌표~맨아랫좌표
-    #     title = 'GT%.1f %d %d PR%.1f %d %d ER%.1f%% ' % (angles_g, pos_g[0], pos_g[1],
-    #     #                                                      angles_p, pos_p[0], pos_p[1], angle_err * 100)
-    #     #     plt.title('{}_R:PRED, G:GT'.format(ind) + '\n' + title)
-    #     #     #plt.show()
-    #     #     save_name = 'way1_{}'.format(ind)
-    #     #     plt.savefig(os.path.join(pred_path, save_name + '.jpg'))
-    #     #     plt.close()
-    #     #
-    #     #     processing_log.append(dict(
-    #     #         pos_GT0=pos_g[0], pos_GT1=pos_g[1], pos_PR0=pos_p[0], pos_PR1=pos_p[1],
-    #     #         angles_g=angles_g, angles_p=angles_p, err=angle_err
-    #     #     ))
-    #     #
-    #     #     ########################################################
-    #     #     #
-    #     #     #   Left fit과 right fit의 중점을 midpoint curve라고 생각하기
-    #     #     #
-    #     #     ########################################################
-    #     # df = pd.DataFrame(processing_log)
-    #     # df.to_csv(os.path.join(pred_path, save_name + '.csv'))
-
-    ##############################
-    #  WAY1
-    #
-    #
-    #
-    #########################
 def post_way2(label_pred_abs, degree = 6, full = False):
 
     # pred_path = './model/RH_SM_all_ep1999'
@@ -172,16 +141,58 @@ def post_way2(label_pred_abs, degree = 6, full = False):
     pred = pred.reshape(34, 2, 2)
 
     left = pred[:, 0, :]
-    _, coeff_l = label_fit(left, fit_degree, full=True)
+    left_fit, coeff_l = label_fit(left, fit_degree, full=True)
     right = pred[:, 1, :]
-    _, coeff_r = label_fit(right, fit_degree, full=True)
+    right_fit, coeff_r = label_fit(right, fit_degree, full=True)
 
-    coeff = list((coeff_l + coeff_r) / 2)
-    der_coeff = derivative_poli(coeff)
-    # 절대좌표니까 괜찮음상대좌표는 해줘야함
+    fitted_preds = np.concatenate((left_fit.reshape(-1, 1, 2), right_fit.reshape(-1, 1, 2))
+                                  , axis=1)
+    fitted_preds = fitted_preds.flatten().astype(int)
+
+    vec_with_fitted_preds = get_vec_lines(fitted_preds)
+
+    ideal_slope_top = vec_with_fitted_preds[0]
+    tan_top = np.asarray([ideal_slope_top[1], -ideal_slope_top[0]])
+    tan_top /= np.linalg.norm(tan_top)
+
+    ideal_slope_bot = vec_with_fitted_preds[-1]
+    tan_bot = np.asarray([ideal_slope_bot[1], -ideal_slope_bot[0]])
+    tan_bot /= np.linalg.norm(tan_bot)
 
     pred = pred.reshape(17, 4, 2)
     midpoints4 = np.zeros((17, 2))
+    for i, pnts in enumerate(pred):
+        midpoints4[i] = np.average(pnts, axis=0)
+    del_midpoint_y = np.average([midpoints4[i+1,1] - midpoints4[i,1] for i in range(16)])
+
+    top_pad = pred[0] + 1*del_midpoint_y*tan_top
+    bot_pad = pred[-1] - 1*del_midpoint_y * tan_bot
+
+
+
+
+    #이전방법 깃헙에 백업해놓기
+
+    #for middle fit
+
+    # coeff = list((coeff_l + coeff_r) / 2)
+
+
+    #중점으로 플롯 0.56
+    # mid = (left + right) /2
+    # _,coeff = label_fit(mid, fit_degree, full = True)
+
+    #모든좌표로 플롯
+    conc = np.concatenate((top_pad.reshape(-1,2), left, right, bot_pad.reshape(-1,2)), axis = 0)
+    _,coeff = label_fit(conc, fit_degree, full = True)
+
+    #test
+    # plt.figure()
+    # plot_image(image = np.ones((2000,1200)), coord_red=conc, coord_gr=bot_pad, coord_bl=top_pad)
+    # plt.show()
+
+    der_coeff = derivative_poli(coeff)
+    # 절대좌표니까 괜찮음상대좌표는 해줘야함
 
     # midpoint 추정을 피팅한걸로 해서 할 수도 있다
     ############################################
@@ -191,8 +202,6 @@ def post_way2(label_pred_abs, degree = 6, full = False):
     #   그다음 그거가지고 angle구함
     #
     #############################################
-    for i, pnts in enumerate(pred):
-        midpoints4[i] = np.average(pnts, axis=0)
     midpoints_x = midpoints4[:, 1]
 
     der_y = calc_poli(midpoints_x, der_coeff)
@@ -200,12 +209,11 @@ def post_way2(label_pred_abs, degree = 6, full = False):
     slopes = np.ones((17, 2))
     slopes[:, 1] = -der_y
 
-    # for pos in pos_g:
-    #     plt.plot(mid_lines_g[2 * pos:2 * pos + 2, 0] * W, mid_lines_g[2 * pos:2 * pos + 2, 1] * H, 'g')
-    #
-    # for pos in pos_p:
-    #     # plt.plot(mid_lines_p[2 * pos:2 * pos + 2, 0] * W, mid_lines_p[2 * pos:2 * pos + 2, 1] * H, 'r')
-    #     plt.plot([midpoints4[pos, 0] * W], [midpoints4[pos, 1] * H], 'ro', markersize=3.5)
+    #처음 끝 보정
+    # slopes[0] = (vec_with_fitted_preds[0] + slopes[0])/2
+    # slopes[-1] = (vec_with_fitted_preds[-1] + slopes[-1])/2
+
+
 
     ####    Ploting
     d = 1
@@ -227,128 +235,9 @@ def post_way2(label_pred_abs, degree = 6, full = False):
         return slopes, params
     else:
         return slopes
-    #상대좌표로 모든걸 프로세싱
-    # fit_degree = 6
-    #
-    # processing_log = []
-    # ind = -1
-    # for val_data in loader_test:
-    #     imgs = val_data['image'].cpu().numpy()  # for batch size 1
-    #     gts = val_data['label'].cpu().numpy()
-    #     for i, img in enumerate(imgs):
-    #         ind +=1
-    #         gt = gts[i]
-    #         H, W = 512, 256
-    #
-    #         pred = preds[ind]
-    #         pred = pred.reshape(34, 2, 2)
-    #
-    #         ########################################################
-    #         #
-    #         #   Left fit과 right fit의 중점을 midpoint curve라고 생각하기
-    #         #
-    #         ########################################################
-    #         left = pred[:, 0, :].reshape(-1, 2)
-    #         left_fit, _coeff_l = label_fit(left, fit_degree, full=True)
-    #
-    #         right = pred[:, 1, :].reshape(-1, 2)
-    #         right_fit, _coeff_r = label_fit(right, fit_degree, full=True)
-    #
-    #         coeff = (_coeff_l + _coeff_r) / 2
-    #         der_coeff = derivative_poli(coeff)
-    #         der_coeff = [c / (H / W) for c in der_coeff]  # 상대좌표는 해줘야함
-    #
-    #         pred = pred.reshape(17, 4, 2)
-    #         midpoints4 = np.zeros((17, 2))
-    #
-    #         # midpoint 추정을 피팅한걸로 해서 할 수도 있다
-    #         ############################################
-    #         #
-    #         #   midpoint curve의 도함수를 구하고
-    #         #   추정랜드마크의 r값을 통해 해당 기울기 구함
-    #         #   그다음 그거가지고 angle구함
-    #         #
-    #         #############################################
-    #         for i, pnts in enumerate(pred):
-    #             midpoints4[i] = np.average(pnts, axis=0)
-    #         midpoints_x = midpoints4[:, 1]
-    #         der_y = calc_poli(midpoints_x, der_coeff)
-    #         atans = np.arctan(der_y) * 180 / np.pi
-    #         # 1,-m이 slope vector
-    #         slopes = np.ones((17, 2))
-    #         slopes[:, 1] = -der_y
-    #         angles = _get_angle(slopes, slopes)
-    #         pos_p = np.argmax(angles)
-    #         pos_p = np.unravel_index(pos_p, angles.shape)
-    #         angles_p = angles[pos_p] / np.pi * 180
-    #
-    #         angles_g, pos_g, _, mid_lines_g, _ = calc_angle_old(gt, (1, 1))
-    #         angles_g = angles_g[0]
-    #
-    #         angle_err = np.abs(angles_g - angles_p) / angles_g
-    #
-    #         pos_g = pos_g[0:2]
-    #         pos_p = pos_p[0:2]
-    #
-    #         # right = np.tile(lab[:,1,:].expand_dims(1), (1,2,1))
-    #         C, H, W = img.shape
-    #         plt.figure()
-    #
-    #         for pos in pos_g:
-    #             plt.plot(mid_lines_g[2 * pos:2 * pos + 2, 0] * W, mid_lines_g[2 * pos:2 * pos + 2, 1] * H, 'g')
-    #
-    #         for pos in pos_p:
-    #             # plt.plot(mid_lines_p[2 * pos:2 * pos + 2, 0] * W, mid_lines_p[2 * pos:2 * pos + 2, 1] * H, 'r')
-    #             plt.plot([midpoints4[pos, 0] * W], [midpoints4[pos, 1] * H], 'ro', markersize=3.5)
-    #
-    #         #################################
-    #         # fit line 추가
-    #         #
-    #         #################################
-    #         d = 1 / 512
-    #         pred = pred.reshape(34, 2, 2)
-    #         minyl = pred[0, 0, 1]
-    #         minyr = pred[0, 1, 1]
-    #         maxyl = pred[33, 0, 1]
-    #         maxyr = pred[33, 1, 1]
-    #
-    #         left_r = np.arange(minyl, maxyl, d)
-    #         right_r = np.arange(minyr, maxyr, d)
-    #         left_c = calc_poli(left_r, _coeff_l)
-    #         right_c = calc_poli(right_r, _coeff_r)
-    #         left_line = np.concatenate((left_c.reshape(-1, 1), left_r.reshape(-1, 1)), axis=1)
-    #         right_line = np.concatenate((right_c.reshape(-1, 1), right_r.reshape(-1, 1)), axis=1)
-    #
-    #         mid_c = calc_poli(left_r, coeff)
-    #         mid_line = np.concatenate((mid_c.reshape(-1, 1), left_r.reshape(-1, 1)), axis=1)
-    #
-    #         # plt.plot(left_line[:, 0] * W, left_line[:, 1] * H, color='magenta', alpha=0.5)
-    #         # plt.plot(right_line[:, 0] * W, right_line[:, 1] * H, color='magenta', alpha=0.5)
-    #
-    #         plot_image(img, coord_red=midpoints4.reshape(-1), coord_gr=gt, coord_cy=pred, line_red=mid_line)
-    #
-    #         # fit line 윤곽추가 맨윗좌표~맨아랫좌표
-    #         # title = 'GT%.1f %d %d PR%.1f %d %d ER%.1f%% ' % (angles_g, pos_g[0], pos_g[1],
-    #         #                                                  angles_p, pos_p[0], pos_p[1], angle_err * 100)
-    #         title = 'GT%.1f %d %d PR%.1f %.1f %.1f ER%.1f%% ' % (angles_g, pos_g[0], pos_g[1],
-    #                                                              angles_p, atans[pos_p[0]], atans[pos_p[1]],
-    #                                                              angle_err * 100)
-    #         plt.title('{}_R:PRED, G:GT'.format(ind) + '\n' + title)
-    #         # plt.show()
-    #         save_name = 'way2_{}'.format(ind)
-    #         plt.savefig(os.path.join(pred_path, save_name + '.jpg'))
-    #         plt.close()
-    #
-    #         processing_log.append(dict(
-    #             pos_GT0=pos_g[0], pos_GT1=pos_g[1], pos_PR0=pos_p[0], pos_PR1=pos_p[1],
-    #             angles_g=angles_g, angles_p=angles_p, err=angle_err
-    #         ))
-    #
-    # df = pd.DataFrame(processing_log)
-    # df.to_csv(os.path.join(pred_path, save_name + '.csv'))
 
-
-def postprocess_inte(pred_path, images, labels_gt_abs, title=None, save_plot=False, automatic=False):
+def postprocess_inte(pred_path, images, labels_gt_abs, title=None, save_plot=False, automatic=False,
+                     automatic_time = 10, degree = 4):
     author = 'YB'
     #####   Get absolute pred
     if not os.path.exists(os.path.join(pred_path, 'labels_pred_abs.csv')):
@@ -371,21 +260,19 @@ def postprocess_inte(pred_path, images, labels_gt_abs, title=None, save_plot=Fal
         pred = preds[ind]
         H, W, C = image.shape
 
-        fitted_preds, params1 = post_way1(pred, full=True)
-        slopes, params2 = post_way2(pred, full=True)
+        fitted_preds, params1 = post_way1(pred, full=True, degree = degree)
+        slopes, params2 = post_way2(pred, full=True, degree = degree)
 
         gt_angles, gt_pos = calc_angle_old(gt, (H, W), full=True)
         w1_angles, w1_pos = calc_angle_old(fitted_preds, (H, W), full=True)
         w2_angles, w2_pos = calc_angle(slopes, get_mid_points(pred),image_H=H, full=True)
 
-        w1_er_3 = np.abs(w1_angles - gt_angles) / (gt_angles + 1e-8)
-        w2_er_3 = np.abs(w2_angles - gt_angles) / (gt_angles + 1e-8)
+        #convert to smape error
+        w1_error = np.sum(np.abs(w1_angles - gt_angles)) / np.sum(gt_angles + w1_angles)
+        w2_error = np.sum(np.abs(w2_angles - gt_angles)) / np.sum(gt_angles + w2_angles)
 
-        w1_mainerr = w1_er_3[0]
-        w2_mainerr = w2_er_3[0]
-
-        w1_error = np.average(w1_er_3)
-        w2_error = np.average(w2_er_3)
+        w1_mainerr = (np.abs(w1_angles - gt_angles) / (gt_angles + w1_angles + 1e-8))[0]
+        w2_mainerr = (np.abs(w2_angles - gt_angles) / (gt_angles + w2_angles + 1e-8))[0]
 
         pred = pred.reshape(-1, 2, 2)
         delta = pred[:, 0, :] - pred[:, 1, :]
@@ -420,18 +307,20 @@ def postprocess_inte(pred_path, images, labels_gt_abs, title=None, save_plot=Fal
                 plt.plot([left[0], right[0]], [left[1], right[1]], color='blue')
 
             plot_image(image, coord_red=fitted_preds, coord_gr=gt)
-            plt_title = 'a %.1f/p1 %.1f/e1 %.2f/p2 %.1f/e2 %.2f'%\
-                        (gt_angles[0], w1_angles[0], w1_mainerr, w2_angles[0], w2_mainerr)
+            plt_title = 'a %.1f/p1 %.1f/err%% %.2f'%\
+                        (gt_angles[0], w2_angles[0], w2_error*100)
             plt.title('test_{}\n'.format(ind) + plt_title)
 
             if automatic:
                 plt.show()
-                plt.pause(2)
+                plt.pause(automatic_time)
                 plt.close()
             if save_plot:
                 if title is None:
-                    title = 'pred_{}'.format(ind)
-                plt.savefig(os.path.join(pred_path, title + 'png'))
+                    title = 'pred'
+                if not os.path.exists(os.path.join(pred_path, title)):
+                    os.makedirs(os.path.join(pred_path, title))
+                plt.savefig(os.path.join(pred_path,title, title + '_{}'.format(ind)+ '.png'))
                 plt.close()
 
         res_dict = dict(gt_angle1=gt_angles[0], gt_angle2=gt_angles[1], gt_angle3=gt_angles[2],
@@ -443,20 +332,46 @@ def postprocess_inte(pred_path, images, labels_gt_abs, title=None, save_plot=Fal
                         avgdx=deltax, gt_pos=gt_pos, w1_pos=w1_pos, w2_pos=w2_pos
                         )
         result_list.append(res_dict)
+    w1_errors = np.array([di['w1_error'] for di in result_list])
+    w2_errors = np.array([di['w2_error'] for di in result_list])
+
+    print('Avg : w1_e %.2f / w2_e %.2f '%(np.average(w1_errors), np.average(w2_errors)))
+
     df = pd.DataFrame(result_list)
-    df.to_csv(os.path.join(pred_path, 'dict_result.csv'))
+    df.to_csv(os.path.join(pred_path, 'dict_result_%.2f.csv'%(np.average(w2_errors))))
 
     return result_list
 
 if __name__ == '__main__':
-    plt.ion()
     test_label_location = './test_labels'
     test_data_location = './test_images'
     test_data_names = read_data_names(test_label_location)
     test_labels = read_labels(test_label_location)
     test_images = read_images(test_data_location, test_data_names)
 
-    pred_path = './model/renew_34_nopad_ep2100'
-    plt.rcParams["figure.figsize"] = (10, 24)
-    postprocess_inte(pred_path = pred_path, images = test_images,
-                     labels_gt_abs = test_labels, title=None, save_plot=False, automatic=True)
+    train_label_location = './train_labels'
+    train_image_location = './train_images'
+
+    train_labels = read_labels(train_label_location)
+
+    #determine_degree(train_labels)
+
+    #get slope distribution
+
+
+    pred_path = './model/34_Fin_Grad_ep3986'
+    plt.rcParams["figure.figsize"] = (4, 8)
+
+    # for deg in range(3,10):
+    #     print(deg)
+    #     postprocess_inte(pred_path=pred_path, images=test_images,
+    #                      labels_gt_abs=test_labels, title='Way_1_Fin', save_plot = False, automatic=False, degree=deg,
+    #                      automatic_time=30)
+
+    postprocess_inte(pred_path=pred_path, images=test_images,
+                         labels_gt_abs=test_labels, title='Way_2_fin', save_plot = True, automatic=False, degree=6,
+                         automatic_time=30)
+
+    # postprocess_inte(pred_path = pred_path, images = test_images,
+    #                  labels_gt_abs = test_labels, title=None, save_plot = True, automatic=False,
+    #                      automatic_time= 30)

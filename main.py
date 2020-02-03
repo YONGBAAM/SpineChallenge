@@ -34,13 +34,13 @@ config = dict(num_epochs=6000, learning_rates=1e-5, save_every=200,
               model_save_dest="./model", dropout_prob=0.5
               )
 batch_size = 8
-config['model_name'] = '101_Fin_Grad'
+config['model_name'] = '34_Fin_Grad'
 
 ####    DataLoader
 loader_train = get_loader_train(tfm = 'nopad', batch_size=batch_size, shuffle=True)
 loader_val = get_loader_test(tfm = 'nopad', batch_size = 1, shuffle = False )
 ####    MODEL 101_deep
-model = LandmarkNet(resnet_dim=101, classifier = get_classifier_deep(config['dropout_prob']), requires_grad=True).to(device)
+#model = LandmarkNet(resnet_dim=101, classifier = get_classifier_deep(config['dropout_prob']), requires_grad=True).to(device)
 ####    MODEL 34_swallow
 cl34 = nn.Sequential(*[#512 16 8 for 34
     nn.Conv2d(512,128,1),
@@ -63,7 +63,7 @@ cl34 = nn.Sequential(*[#512 16 8 for 34
     nn.Linear(4096,136)
 
 ])
-#model = LandmarkNet(resnet_dim=34, classifier = cl34, requires_grad=True).to(device)
+model = LandmarkNet(resnet_dim=34, classifier = cl34, requires_grad=True).to(device)
 
 ####    For testing
 # model = nn.Sequential(*[
@@ -76,15 +76,15 @@ cl34 = nn.Sequential(*[#512 16 8 for 34
 # model.to(device)
 
 trainer = Trainer(model=model,
-
                   optimizer=torch.optim.Adam(model.parameters(), lr=config['learning_rates']),
                   loader_train = loader_train, loader_val = loader_val, criterion = nn.SmoothL1Loss(), **config)
 
 #trainer.test(test_loader=loader_val, load_model_name='NEW_TEST_ep4_tL1.65e+16_vL1.55e+00.tar')
-trainer.load_model('101_Fin_Grad_ep1498_tL7.70e-04_vL3.81e-04', model_only = False)
+trainer.load_model('34_Fin_Grad_ep3986_tL2.61e-04_vL3.98e-04.tar', model_only = False)
 #trainer.optimizer=torch.optim.Adam(model.parameters(), lr=1e-6)
-#trainer.test(test_loader = loader_val, load_model_name='renew_34_nopad_ep2100_tL2.74e-04_vL3.98e-04.tar',save_image=False)
-trainer.train()
+trainer.test(test_loader = loader_val, load_model_name='34_Fin_Grad_ep3986_tL2.61e-04_vL3.98e-04.tar',
+             save_image=False)
+#trainer.train()
 
 
 

@@ -61,70 +61,71 @@ cl34 = nn.Sequential(*[#512 16 8 for 34
 
 ])
 
+
 ############################################################################
+############################################################################
+############################################################################
+# config['dropout_prob'] = 0.0
+# config['is_lr_decay'] = False
+# batch_size = 64
+# config['model_name'] = 'nopooldrop'
+#
+# ####    DataLoader
+# loader_train = get_loader_train(tfm = 'nopad_val', batch_size=batch_size, shuffle=True)
+# loader_val = get_loader_test(tfm = 'nopad_val', batch_size = 1, shuffle = False )
+# ####    MODEL 101_deep
+# #model = LandmarkNet(resnet_dim=101, classifier = get_classifier_deep(config['dropout_prob']), requires_grad=True).to(device)
+# ####    MODEL 34_swallow
+#
+# cl_for_flat = nn.Sequential(*[
+#     nn.Flatten(),   #2048
+#
+#     nn.Linear(2048,4096),
+#     nn.ReLU(),
+#
+#     nn.Linear(4096,4096),
+#     nn.ReLU(),
+#
+#     nn.Linear(4096,1024),
+#     nn.ReLU(),
+#
+#     nn.Linear(1024,136)
+# ])
+# model = LandmarkNet(resnet_dim=101, classifier= cl_for_flat, requires_grad=False, pool_drop=False).to(device)
+#
+# trainer = Trainer(model=model,
+#                   optimizer=torch.optim.Adam(model.parameters(), lr=config['learning_rates']),
+#                   loader_train = loader_train, loader_val = loader_val, criterion = nn.MSELoss(), **config)
+# trainer.train()
+# trainer.test()
+#
+# ############################################################################
+# ############################################################################
+# ############################################################################
+# config['dropout_prob'] = 0.0
+# config['is_lr_decay'] = False
+# batch_size =64
+# config['model_name'] = 'pool_RH'
+#
+# ####    DataLoader
+# loader_train = get_loader_train(tfm = 'nopad', batch_size=batch_size, shuffle=True)
+# loader_val = get_loader_test(tfm='nopad_val', batch_size=1, shuffle=False)
+# ####    MODEL 101_deep
+# # model = LandmarkNet(resnet_dim=101, classifier = get_classifier_deep(config['dropout_prob']), requires_grad=True).to(device)
+# ####    MODEL 34_swallow
+# model = LandmarkNet(resnet_dim=101, classifier=cl_for_flat, requires_grad=False, pool_drop=False).to(device)
+#
+# trainer = Trainer(model=model,
+#                   optimizer=torch.optim.Adam(model.parameters(), lr=config['learning_rates']),
+#                   loader_train=loader_train, loader_val=loader_val, criterion=nn.MSELoss(), **config)
+# trainer.train()
+# trainer.test()
+
 ############################################################################
 ############################################################################
 config['dropout_prob'] = 0.0
 config['is_lr_decay'] = False
-batch_size = 96
-config['model_name'] = 'nopooldrop'
-
-####    DataLoader
-loader_train = get_loader_train(tfm = 'nopad_val', batch_size=batch_size, shuffle=True)
-loader_val = get_loader_test(tfm = 'nopad_val', batch_size = 1, shuffle = False )
-####    MODEL 101_deep
-#model = LandmarkNet(resnet_dim=101, classifier = get_classifier_deep(config['dropout_prob']), requires_grad=True).to(device)
-####    MODEL 34_swallow
-
-cl_for_flat = nn.Sequential(*[
-    nn.Flatten(),   #2048
-
-    nn.Linear(2048,4096),
-    nn.ReLU(),
-
-    nn.Linear(4096,4096),
-    nn.ReLU(),
-
-    nn.Linear(4096,1024),
-    nn.ReLU(),
-
-    nn.Linear(1024,136)
-])
-model = LandmarkNet(resnet_dim=101, classifier= cl_for_flat, requires_grad=False, pool_drop=False).to(device)
-
-trainer = Trainer(model=model,
-                  optimizer=torch.optim.Adam(model.parameters(), lr=config['learning_rates']),
-                  loader_train = loader_train, loader_val = loader_val, criterion = nn.MSELoss(), **config)
-trainer.train()
-trainer.test()
-
-############################################################################
-############################################################################
-############################################################################
-config['dropout_prob'] = 0.0
-config['is_lr_decay'] = False
-batch_size = 96
-config['model_name'] = 'pool_RH'
-
-####    DataLoader
-loader_train = get_loader_train(tfm = 'nopad', batch_size=batch_size, shuffle=True)
-loader_val = get_loader_test(tfm='nopad_val', batch_size=1, shuffle=False)
-####    MODEL 101_deep
-# model = LandmarkNet(resnet_dim=101, classifier = get_classifier_deep(config['dropout_prob']), requires_grad=True).to(device)
-####    MODEL 34_swallow
-model = LandmarkNet(resnet_dim=101, classifier=cl_for_flat, requires_grad=False, pool_drop=False).to(device)
-
-trainer = Trainer(model=model,
-                  optimizer=torch.optim.Adam(model.parameters(), lr=config['learning_rates']),
-                  loader_train=loader_train, loader_val=loader_val, criterion=nn.MSELoss(), **config)
-trainer.train()
-trainer.test()
-
-############################################################################
-############################################################################
-config['dropout_prob'] = 0.0
-config['is_lr_decay'] = False
-batch_size = 96
+batch_size = 64
 config['model_name'] = 'pooldrop'
 
 ####    DataLoader
@@ -150,7 +151,7 @@ trainer.test()
 ############################################################################
 config['dropout_prob'] = 0.0
 config['is_lr_decay'] = False
-batch_size = 96
+batch_size = 64
 config['model_name'] = 'nodropout'
 
 ####    DataLoader
@@ -173,7 +174,7 @@ trainer.test()
 ############################################################################
 config['dropout_prob'] = 0.5
 config['is_lr_decay'] = False
-batch_size = 96
+batch_size = 64
 config['model_name'] = 'nodeep'
 
 ####    DataLoader
@@ -196,7 +197,7 @@ trainer.test()
 ############################################################################
 config['dropout_prob'] = 0.5
 config['is_lr_decay'] = False
-batch_size = 96
+batch_size = 64
 config['model_name'] = 'pad'
 
 ####    DataLoader
@@ -219,7 +220,7 @@ trainer.test()
 ############################################################################
 config['dropout_prob'] = 0.5
 config['is_lr_decay'] = False
-batch_size = 96
+batch_size = 64
 config['model_name'] = 'sub_final'
 
 
@@ -243,7 +244,7 @@ trainer.test()
 ############################################################################
 config['dropout_prob'] = 0.5
 config['is_lr_decay'] = True
-batch_size = 96
+batch_size = 64
 config['model_name'] = 'sub_final_decay'
 
 ####    DataLoader
@@ -266,8 +267,8 @@ trainer.test()
 ############################################################################
 config['dropout_prob'] = 0.5
 config['is_lr_decay'] = False
-batch_size = 96
-config['model_name'] = 'sub_final_l1'
+batch_size = 64
+config['model_name'] = 'sub_final_L1'
 
 ####    DataLoader
 loader_train = get_loader_train(tfm = 'nopad', batch_size=batch_size, shuffle=True)
