@@ -256,10 +256,12 @@ def postprocess_inte(pred_path, images, labels_gt_abs, title=None, save_plot=Fal
 
     result_list = []
     for ind, image in enumerate(images):
+
         gt = labels_gt_abs[ind]
+
         pred = preds[ind]
         H, W, C = image.shape
-
+        #gt = to_absolute(gt, H, W)
         fitted_preds, params1 = post_way1(pred, full=True, degree = degree)
         slopes, params2 = post_way2(pred, full=True, degree = degree)
 
@@ -348,9 +350,10 @@ if __name__ == '__main__':
     test_data_names = read_data_names(test_label_location)
     test_labels = read_labels(test_label_location)
     test_images = read_images(test_data_location, test_data_names)
-
+    test_labels_nosort = read_labels(test_label_location, title = 'landmarks')
     train_label_location = './train_labels'
     train_image_location = './train_images'
+    test_labels_nosort = label_sort(test_labels_nosort)
 
     train_labels = read_labels(train_label_location)
 
@@ -369,7 +372,7 @@ if __name__ == '__main__':
     #                      automatic_time=30)
 
     postprocess_inte(pred_path=pred_path, images=test_images,
-                         labels_gt_abs=test_labels, title='Way_2_fin', save_plot = True, automatic=False, degree=6,
+                         labels_gt_abs=test_labels_nosort, title='Withnonsorted', save_plot = True, automatic=False, degree=6,
                          automatic_time=30)
 
     # postprocess_inte(pred_path = pred_path, images = test_images,
