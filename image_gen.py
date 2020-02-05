@@ -18,11 +18,12 @@ import time
 
 #############################################
 #
-#   Other than Help Function, Added comments to those functions.
-#   post_way1
-#   post_way2
-#   postprocess_inte
+#   잘못됬음!! label가지고 각도 구할때는 원본이미지 스케일에서 해야 함!
+#   테스트 이미지 이터레이터 구현
+#   이제 노패드니까 프레딕트도 relative label로 걍 두기
 #
+#
+#   정리는 더 안해도 된다.
 ###############################################
 def calc_poli(x, coeffs):
     res = np.zeros_like(x)
@@ -83,15 +84,6 @@ def determine_degree(true_labels):
 def post_way1(label_pred_abs, degree = 6, full = False):
     #pred_path = './model/RH_SM_all_ep1999'
 
-    ##########################################
-    #
-    #   Return predicted angles and related Parameters
-    #
-    #   label_pred_abs : absolute predicted label
-    #   if full == True : return angles AND parameters
-    #
-    #########################################
-
     ####    Get ablsolute prediction
     fit_degree = degree
     pred = label_pred_abs
@@ -138,110 +130,10 @@ def post_way1(label_pred_abs, degree = 6, full = False):
     else:
         return fitted_preds
 
-def post_way2_v0(label_pred_abs, degree = 6, full = False):
+def post_way2(label_pred_abs, degree = 6, full = False):
 
+    # pred_path = './model/RH_SM_all_ep1999'
 
-    ##############################
-    #
-    #   왼쪽 오른쪽 각각 핏하고
-    #   핏한거의 중점을 통해 도함수
-    #
-    ################################
-    fit_degree = degree
-    pred = label_pred_abs
-
-    pred = pred.reshape(34, 2, 2)
-
-    left = pred[:, 0, :]
-    left_fit, coeff_l = label_fit(left, fit_degree, full=True)
-    right = pred[:, 1, :]
-    right_fit, coeff_r = label_fit(right, fit_degree, full=True)
-
-    pred = pred.reshape(17, 4, 2)
-    midpoints4 = np.zeros((17, 2))
-    for i, pnts in enumerate(pred):
-        midpoints4[i] = np.average(pnts, axis=0)
-
-    coeff = list((coeff_l + coeff_r) / 2)
-    der_coeff = derivative_poli(coeff)
-    midpoints_x = midpoints4[:, 1]
-    der_y = calc_poli(midpoints_x, der_coeff)
-    # 1,-m이 slope vector
-    slopes = np.ones((17, 2))
-    slopes[:, 1] = -der_y
-    ####    Ploting
-    d = 1
-    pred = pred.reshape(34, 2, 2)
-    minyl = pred[0, 0, 1]
-    minyr = pred[0, 1, 1]
-    miny = int((minyl + minyr) / 2)
-    maxyl = pred[33, 0, 1]
-    maxyr = pred[33, 1, 1]
-    maxy = int((maxyl + maxyr) / 2)
-    middle_r = np.arange(miny, maxy, d)
-    middle_c = calc_poli(middle_r, coeff)
-    middle_line = np.concatenate((middle_c.reshape(-1, 1), middle_r.reshape(-1, 1)), axis=1)
-
-    params = dict(
-        coeff=coeff, line=middle_line, middle_vec=midpoints4
-    )
-    if full:
-        return slopes, params
-    else:
-        return slopes
-
-def post_way2_v1(label_pred_abs, degree = 6, full = False):
-    #############################
-    #
-    #   전체랜드마크 가지고 핏
-    #   미드포인트 가지고 추정
-    #
-    ##############################
-    fit_degree = degree
-    pred = label_pred_abs
-
-    pred = pred.reshape(34, 2, 2)
-
-    left = pred[:, 0, :]
-    right = pred[:, 1, :]
-
-    pred = pred.reshape(17, 4, 2)
-    midpoints4 = np.zeros((17, 2))
-    for i, pnts in enumerate(pred):
-        midpoints4[i] = np.average(pnts, axis=0)
-
-    #모든좌표로 플롯
-    conc = np.concatenate((left, right), axis = 0)
-    _,coeff = label_fit(conc, fit_degree, full = True)
-    der_coeff = derivative_poli(coeff)
-    midpoints_x = midpoints4[:, 1]
-    der_y = calc_poli(midpoints_x, der_coeff)
-    # 1,-m이 slope vector
-    slopes = np.ones((17, 2))
-    slopes[:, 1] = -der_y
-
-    ####    Ploting
-    d = 1
-    pred = pred.reshape(34, 2, 2)
-    minyl = pred[0, 0, 1]
-    minyr = pred[0, 1, 1]
-    miny = int((minyl + minyr) / 2)
-    maxyl = pred[33, 0, 1]
-    maxyr = pred[33, 1, 1]
-    maxy = int((maxyl + maxyr) / 2)
-    middle_r = np.arange(miny, maxy, d)
-    middle_c = calc_poli(middle_r, coeff)
-    middle_line = np.concatenate((middle_c.reshape(-1, 1), middle_r.reshape(-1, 1)), axis=1)
-
-    params = dict(
-        coeff = coeff, line = middle_line, middle_vec = midpoints4
-    )
-    if full:
-        return slopes, params
-    else:
-        return slopes
-
-def post_way2_v2(label_pred_abs, degree = 6, full = False):
     ####    Get ablsolute prediction
     fit_degree = degree
     pred = label_pred_abs
@@ -259,78 +151,6 @@ def post_way2_v2(label_pred_abs, degree = 6, full = False):
 
     vec_with_fitted_preds = get_vec_lines(fitted_preds)
 
-    pred = pred.reshape(17, 4, 2)
-    midpoints4 = np.zeros((17, 2))
-    for i, pnts in enumerate(pred):
-        midpoints4[i] = np.average(pnts, axis=0)
-
-    #모든좌표로 플롯
-    conc = np.concatenate((left, right), axis = 0)
-    _,coeff = label_fit(conc, fit_degree, full = True)
-    der_coeff = derivative_poli(coeff)
-    midpoints_x = midpoints4[:, 1]
-    der_y = calc_poli(midpoints_x, der_coeff)
-    # 1,-m이 slope vector
-    slopes = np.ones((17, 2))
-    slopes[:, 1] = -der_y
-
-    #처음 끝 보정
-    slopes[0] = vec_with_fitted_preds[0]
-    slopes[-1] = vec_with_fitted_preds[-1]
-
-
-
-    ####    Ploting
-    d = 1
-    pred = pred.reshape(34, 2, 2)
-    minyl = pred[0, 0, 1]
-    minyr = pred[0, 1, 1]
-    miny = int((minyl + minyr) / 2)
-    maxyl = pred[33, 0, 1]
-    maxyr = pred[33, 1, 1]
-    maxy = int((maxyl + maxyr) / 2)
-    middle_r = np.arange(miny, maxy, d)
-    middle_c = calc_poli(middle_r, coeff)
-    middle_line = np.concatenate((middle_c.reshape(-1, 1), middle_r.reshape(-1, 1)), axis=1)
-
-    params = dict(
-        coeff = coeff, line = middle_line, middle_vec = midpoints4
-    )
-    if full:
-        return slopes, params
-    else:
-        return slopes
-
-def post_way2(label_pred_abs, degree = 6, full = False):
-    ##########################################
-    #
-    #   Return predicted angles and related Parameters
-    #
-    #   label_pred_abs : absolute predicted label
-    #   if full == True : return angles AND parameters
-    #
-    #########################################
-
-
-    fit_degree = degree
-    pred = label_pred_abs
-
-    pred = pred.reshape(34, 2, 2)
-
-    left = pred[:, 0, :]
-    left_fit, coeff_l = label_fit(left, fit_degree, full=True)
-    right = pred[:, 1, :]
-    right_fit, coeff_r = label_fit(right, fit_degree, full=True)
-
-    #   getting fitted landmark
-    fitted_preds = np.concatenate((left_fit.reshape(-1, 1, 2), right_fit.reshape(-1, 1, 2))
-                                  , axis=1)
-    fitted_preds = fitted_preds.flatten().astype(int)
-
-    #get vector line with fitted landmark
-    vec_with_fitted_preds = get_vec_lines(fitted_preds)
-
-    #Making padding landmarks
     ideal_slope_top = vec_with_fitted_preds[0]
     tan_top = np.asarray([ideal_slope_top[1], -ideal_slope_top[0]])
     tan_top /= np.linalg.norm(tan_top)
@@ -348,15 +168,37 @@ def post_way2(label_pred_abs, degree = 6, full = False):
     top_pad = pred[0] + 1*del_midpoint_y*tan_top
     bot_pad = pred[-1] - 1*del_midpoint_y * tan_bot
 
+
+
+
+    #이전방법 깃헙에 백업해놓기
+
+    #for middle fit
+
+    # coeff = list((coeff_l + coeff_r) / 2)
+
+
+    #중점으로 플롯 0.56
+    # mid = (left + right) /2
+    # _,coeff = label_fit(mid, fit_degree, full = True)
+
     #모든좌표로 플롯
     conc = np.concatenate((top_pad.reshape(-1,2), left, right, bot_pad.reshape(-1,2)), axis = 0)
     _,coeff = label_fit(conc, fit_degree, full = True)
 
+    #test
+    # plt.figure()
+    # plot_image(image = np.ones((2000,1200)), coord_red=conc, coord_gr=bot_pad, coord_bl=top_pad)
+    # plt.show()
+
     der_coeff = derivative_poli(coeff)
+    # 절대좌표니까 괜찮음상대좌표는 해줘야함
+
+    # midpoint 추정을 피팅한걸로 해서 할 수도 있다
     ############################################
     #
     #   midpoint curve의 도함수를 구하고
-    #   추정랜드마크의 r(y)값을 통해 해당 기울기 구함
+    #   추정랜드마크의 r값을 통해 해당 기울기 구함
     #   그다음 그거가지고 angle구함
     #
     #############################################
@@ -373,7 +215,7 @@ def post_way2(label_pred_abs, degree = 6, full = False):
 
 
 
-    ####    For Ploting
+    ####    Ploting
     d = 1
     pred = pred.reshape(34, 2, 2)
     minyl = pred[0, 0, 1]
@@ -395,16 +237,9 @@ def post_way2(label_pred_abs, degree = 6, full = False):
         return slopes
 
 def postprocess_inte(pred_path, images, labels_gt_abs, title=None, save_plot=False, automatic=False,
-                     automatic_time = 10, degree = 6, method1_on = True, method2_on = True, method2_ver = None):
+                     automatic_time = 10, degree = 6):
     author = 'YB'
-
-    ############################
-    #
-    #   plot result vector
-    #   if save_plot == True : save image to folder
-    #   Do not adjust other settings.
-    #
-    ############################
+    #####   Get absolute pred
     if not os.path.exists(os.path.join(pred_path, 'labels_pred_abs.csv')):
         preds_rel = read_labels(pred_path, title='labels_pred_rel')
         preds = []
@@ -428,16 +263,7 @@ def postprocess_inte(pred_path, images, labels_gt_abs, title=None, save_plot=Fal
         H, W, C = image.shape
         #gt = to_absolute(gt, H, W)
         fitted_preds, params1 = post_way1(pred, full=True, degree = degree)
-        if method2_ver ==0:
-            slopes, params2 = post_way2_v0(pred, full=True, degree=degree)
-        elif method2_ver ==1:
-            slopes, params2 = post_way2_v1(pred, full=True, degree=degree)
-        elif method2_ver ==2:
-            slopes, params2 = post_way2_v2(pred, full=True, degree=degree)
-        elif method2_ver == None:
-            slopes, params2 = post_way2(pred, full=True, degree = degree)
-        else:
-            slopes, params2 = post_way2(pred, full=True, degree=degree)
+        slopes, params2 = post_way2(pred, full=True, degree = degree)
 
         gt_angles, gt_pos = calc_angle_old(gt, (H, W), full=True)
         w1_angles, w1_pos = calc_angle_old(fitted_preds, (H, W), full=True)
@@ -461,20 +287,17 @@ def postprocess_inte(pred_path, images, labels_gt_abs, title=None, save_plot=Fal
             # R for w1
             left_line = params1['left_line']
             right_line = params1['right_line']
-            if method1_on:
-                plt.plot(left_line[:, 0], left_line[:, 1], color='magenta', alpha=0.5)
-                plt.plot(right_line[:, 0], right_line[:, 1], color='magenta', alpha=0.5)
+            plt.plot(left_line[:, 0], left_line[:, 1], color='magenta', alpha=0.5)
+            plt.plot(right_line[:, 0], right_line[:, 1], color='magenta', alpha=0.5)
 
             _fp = fitted_preds.reshape(-1,2,2).copy()
             for pos in w1_pos:
                 dots = np.average(_fp[2*pos:2*pos+2,:,:], axis = 0)
-                if method1_on:
-                    plt.plot(dots[:,0], dots[:,1], 'r')
+                plt.plot(dots[:,0], dots[:,1], 'r')
 
             # blue for w2
             middle_line = params2['line']
-            if method2_on:
-                plt.plot(middle_line[:, 0], middle_line[:, 1], color='cyan', alpha=0.5)
+            plt.plot(middle_line[:, 0], middle_line[:, 1], color='cyan', alpha=0.5)
 
             vec_center = params2['middle_vec']
             for pos in w2_pos:
@@ -483,15 +306,10 @@ def postprocess_inte(pred_path, images, labels_gt_abs, title=None, save_plot=Fal
                 norm_slope = _slope / np.linalg.norm(_slope)
                 right = center + norm_slope * 50
                 left = center - norm_slope * 50
-                if method2_on:
-                    plt.plot([left[0], right[0]], [left[1], right[1]], color='blue')
+                plt.plot([left[0], right[0]], [left[1], right[1]], color='blue')
 
             plot_image(image, coord_red=fitted_preds, coord_gr=gt)
-            if method1_on and not method2_on:
-                plt_title = 'a %.1f/p1 %.1f/err%% %.2f' % \
-                            (gt_angles[0], w1_angles[0], w1_error * 100)
-            else:
-                plt_title = 'a %.1f/p1 %.1f/err%% %.2f'%\
+            plt_title = 'a %.1f/p1 %.1f/err%% %.2f'%\
                         (gt_angles[0], w2_angles[0], w2_error*100)
             plt.title('test_{}\n'.format(ind) + plt_title)
 
@@ -527,23 +345,47 @@ def postprocess_inte(pred_path, images, labels_gt_abs, title=None, save_plot=Fal
     return result_list
 
 if __name__ == '__main__':
-    test_label_location = './test_labels'
-    test_data_location = './test_images'
-    test_data_names = read_data_names(test_label_location)
-    test_labels = read_labels(test_label_location)
-    test_images = read_images(test_data_location, test_data_names)
+    plt.rcParams["figure.figsize"] = (4, 8)
+    # test_label_location = './test_labels'
+    # test_data_location = './test_images'
+    # test_data_names = read_data_names(test_label_location)
+    # test_labels = read_labels(test_label_location)
+    # test_images = read_images(test_data_location, test_data_names)
+
     train_label_location = './train_labels'
     train_image_location = './train_images'
 
+    out_path = './plots'
+
     train_labels = read_labels(train_label_location)
+    train_data_names = read_data_names(train_label_location)
 
-    #determine_degree(train_labels)
+    train_images = read_images(train_image_location, train_data_names)
 
-    #get slope distribution
+    count = 0
+
+    for ind, image in enumerate(train_images):
+        label = train_labels[ind]
+        plt.figure()
+        #title = 'train_vanila'
+        H,W,C = image.shape
+        gt = label
+        gt_angles, gt_pos = calc_angle_old(gt, (H, W), full=True)
+        _fp = gt.reshape(-1, 2, 2).copy()
+        for pos in gt_pos:
+            dots = np.average(_fp[2 * pos:2 * pos + 2, :, :], axis=0)
+            if True:
+                plt.plot(dots[:, 0], dots[:, 1], 'g')
 
 
-    pred_path = './model/34_Fin_Grad_ep3986'
-    plt.rcParams["figure.figsize"] = (4, 8)
+        title = 'train_demo'
+        plt.title('{}_'.format(ind) + 'p {}/{}/{}/{}'.format(*gt_pos)+ '\n' +
+                        'a %.1f/%.1f/%.1f'%(gt_angles[0], gt_angles[1], gt_angles[2])
+                  )
+        plot_image(image, coord_gr = label)
+        plt.savefig(os.path.join(out_path, title + '_{}'.format(ind) + '.png'))
+        if count <5:
+            count+=1
+            plt.show()
 
-    postprocess_inte(pred_path=pred_path, images=test_images,
-                     labels_gt_abs=test_labels, title='Distribute', save_plot=True)
+        plt.close()

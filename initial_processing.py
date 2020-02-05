@@ -90,9 +90,13 @@ def preprocessing():
 
 def prepare_label():
     # read matlab label and save to csv
-    image_location = './train_images'
-    label_location_mat = './train_labels_mat'
-    label_save_dest = './train_labels_mat'
+    # image_location = './train_images'
+    # label_location_mat = './train_labels_mat'
+    # label_save_dest = './train_labels_mat'
+
+    image_location = './test_images'
+    label_location_mat = './Old/boostnet_labeldata/labels/test'
+    label_save_dest = './test_labels_mat'
 
     label_path_all = os.listdir(label_location_mat)
 
@@ -129,76 +133,93 @@ def draw_seg(coord, H, W):
     return seg_image
 
 if __name__ == '__main__':
-    ####################
-    ####
-    ####    Check label order
+    label_test_frommat = read_labels('./test_labels_mat')
+    label_test_my = read_labels('./test_labels')
 
+    # label_test_frommat = read_labels('./test_labels', title = 'landmarks')
+    # label_test_frommat = label_test_frommat.reshape(-1,2,68).transpose(0,2,1).reshape(-1,136)
 
+    equal = label_test_frommat == label_test_my
 
-    test_data_location = './test_images'
-    test_label_location = './test_labels'
-    test_labels = read_labels(test_label_location)
-    test_data_names = read_data_names(test_label_location)
-    test_images = read_images(test_data_location, test_data_names)
+    diff = label_test_my.size - np.sum(equal)
+    print('unsorted label differs in {}'.format(diff))
 
-    train_data_location = './train_images'
-    train_label_location = './train_labels'
+    sorted_label = label_sort(label_test_frommat)
+    equal = sorted_label == label_test_my
+    diff = label_test_my.size - np.sum(equal)
 
-    #train_labels = read_labels(train_label_location)
-    train_labels = read_labels(train_label_location, title = 'labels_m')
-    train_data_names = read_data_names(train_label_location)
-    train_images = read_images(train_data_location, train_data_names)
+    print('sorted label differs in {}'.format(diff))
 
-    # train_labels_nosort = read_labels(train_label_location, title = 'labels_nosort')
-    # train_labels[1] = train_labels_nosort[1]
-    # train_labels[75] = train_labels_nosort[75]
+    # ####################
+    # ####
+    # ####    Check label order
     #
-    # write_labels(train_labels, label_location= train_label_location, title = 'labels_finver')
-
-
-    error_datas = []
-    #label 유효성 검사
-    for ind, image in enumerate(test_images):
-        gt = test_labels[ind]
-
-        ##label 유효성 검사
-        gt = gt.reshape(34,2,2)
-        mask = np.zeros_like(gt)
-
-        is_error = False
-        #left x < right x
-        for i in range(34):
-            if not gt[i,0,0] <= gt[i,1,0]:
-                is_error = True
-                mask[i,0,:] = 1
-                mask[i,1,:] = 1
-                print('{} : left right '.format(ind))
-
-        #top y < bot y (matrix coordinate)
-        for i in range(33):
-            if not gt[i,0,1] <= gt[i+1,0,1]:
-                mask[i,0,:] = 1
-                mask[i+1,0,:] = 1
-                is_error = True
-                print('{} : top bot for left '.format(ind))
-            if not gt[i,1,1] <= gt[i+1,1,1]:
-                mask[i, 1, :] = 1
-                mask[i + 1, 1, :] = 1
-                is_error = True
-                print('{} : top bot for right '.format(ind))
-
-
-
-        if is_error:
-            notmask = np.ones_like(gt) - mask
-            gt_m = gt * notmask + np.ones_like(gt)
-            gt_error = gt*mask + np.ones_like(gt)
-
-            plt.figure()
-            plt.title('ind : {}'.format(ind))
-
-            plot_image(image, coord_red=gt_m.flatten(), coord_gr = gt_error.flatten())
-            plt.show()
-        # plt.figure()
-        # plot_image(image, coord_red=gt[:,0,:].flatten(), coord_gr= gt[:,1,:].flatten())
-        # plt.show()
+    #
+    #
+    # test_data_location = './test_images'
+    # test_label_location = './test_labels'
+    # test_labels = read_labels(test_label_location)
+    # test_data_names = read_data_names(test_label_location)
+    # test_images = read_images(test_data_location, test_data_names)
+    #
+    # train_data_location = './train_images'
+    # train_label_location = './train_labels'
+    #
+    # #train_labels = read_labels(train_label_location)
+    # train_labels = read_labels(train_label_location, title = 'labels_m')
+    # train_data_names = read_data_names(train_label_location)
+    # train_images = read_images(train_data_location, train_data_names)
+    #
+    # # train_labels_nosort = read_labels(train_label_location, title = 'labels_nosort')
+    # # train_labels[1] = train_labels_nosort[1]
+    # # train_labels[75] = train_labels_nosort[75]
+    # #
+    # # write_labels(train_labels, label_location= train_label_location, title = 'labels_finver')
+    #
+    #
+    # error_datas = []
+    # #label 유효성 검사
+    # for ind, image in enumerate(test_images):
+    #     gt = test_labels[ind]
+    #
+    #     ##label 유효성 검사
+    #     gt = gt.reshape(34,2,2)
+    #     mask = np.zeros_like(gt)
+    #
+    #     is_error = False
+    #     #left x < right x
+    #     for i in range(34):
+    #         if not gt[i,0,0] <= gt[i,1,0]:
+    #             is_error = True
+    #             mask[i,0,:] = 1
+    #             mask[i,1,:] = 1
+    #             print('{} : left right '.format(ind))
+    #
+    #     #top y < bot y (matrix coordinate)
+    #     for i in range(33):
+    #         if not gt[i,0,1] <= gt[i+1,0,1]:
+    #             mask[i,0,:] = 1
+    #             mask[i+1,0,:] = 1
+    #             is_error = True
+    #             print('{} : top bot for left '.format(ind))
+    #         if not gt[i,1,1] <= gt[i+1,1,1]:
+    #             mask[i, 1, :] = 1
+    #             mask[i + 1, 1, :] = 1
+    #             is_error = True
+    #             print('{} : top bot for right '.format(ind))
+    #
+    #
+    #
+    #     if is_error:
+    #         notmask = np.ones_like(gt) - mask
+    #         gt_m = gt * notmask + np.ones_like(gt)
+    #         gt_error = gt*mask + np.ones_like(gt)
+    #
+    #         plt.figure()
+    #         plt.title('ind : {}'.format(ind))
+    #
+    #         plot_image(image, coord_red=gt_m.flatten(), coord_gr = gt_error.flatten())
+    #         plt.show()
+    #     # plt.figure()
+    #     # plot_image(image, coord_red=gt[:,0,:].flatten(), coord_gr= gt[:,1,:].flatten())
+    #     # plt.show()

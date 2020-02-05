@@ -31,6 +31,8 @@ def plot_image(image, coord_red = None, coord_gr = None, coord_bl = None,
 
     H,W,C = image.shape
 
+    green = [[0.1,1,0.1,1]]
+
     #imshow는 scatter 뒤에 해야 함!
 
     if coord_red is not None:
@@ -43,7 +45,7 @@ def plot_image(image, coord_red = None, coord_gr = None, coord_bl = None,
         coord_gr = np.copy(coord_gr.reshape(-1, 2))
         if coord_gr.flatten()[0] < 1:
             coord_gr = to_absolute(coord_gr)
-        plt.scatter(coord_gr[:, 0], coord_gr[:, 1], s=1.2, c='green')
+        plt.scatter(coord_gr[:, 0], coord_gr[:, 1], s=1.2, c=green)
 
     if coord_bl is not None:
         coord_bl = np.copy(coord_bl.reshape(-1, 2))
@@ -61,7 +63,7 @@ def plot_image(image, coord_red = None, coord_gr = None, coord_bl = None,
         line = np.copy(line_gr.reshape(-1, 2))
         if line.flatten()[0] <1:
             line = to_absolute(line)
-        plt.plot(line[:, 0], line[:, 1], color ='green', alpha = 0.5)
+        plt.plot(line[:, 0], line[:, 1], color =green, alpha = 0.5)
 
     if line_bl is not None:
         line = np.copy(line_bl.reshape(-1, 2))
@@ -86,6 +88,10 @@ def plot_image(image, coord_red = None, coord_gr = None, coord_bl = None,
             plt.imshow(image * (1 - 2 * alpha) + segmap * alpha + ref_segmap * alpha)
         else:
             plt.imshow(image * (1 - alpha) + segmap * alpha)
+
+    plt.subplots_adjust(left=0.00, bottom=0.00, right=1 - 0.00, top=1 - 0.10, hspace=0, wspace=0)
+    plt.axis('off')
+
 def label_sort_x(labels):
     labels = labels.reshape(-1,34,2,2)
     for label in labels:
