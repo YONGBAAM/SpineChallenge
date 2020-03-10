@@ -6,8 +6,9 @@ plots/
 model/
 .idea/
 __pycache__/
-
+*.npy
 mytest.py
 *.pem
 signal.txt
 main_sub.py
+*.zip

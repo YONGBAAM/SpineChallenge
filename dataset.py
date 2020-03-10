@@ -79,6 +79,8 @@ class CoordDataset(Dataset):
                 image, label = transform(image, label)
 
         image = self.toTensor(image)
+        if image.shape[0] ==3:
+            image = torch.mean(image, dim = 0, keepdim = True)
         image = self.nor(image)
         return {'image' : image, 'label' : label}
 
@@ -189,6 +191,27 @@ def get_loader_test(tfm = 'nopad', batch_size = 1, shuffle = False):
     label_path = './test_labels'
     labels = read_labels(label_path)
     data_names = read_data_names(label_path)
+    dset_test = CoordDataset(data_path, labels, data_names, transform_list=tfm)
+
+    loader_test = DataLoader(dataset=dset_test, batch_size=batch_size, shuffle=shuffle)
+    return loader_test
+
+def get_loader_record(tfm = 'nopad', batch_size = 1, shuffle = False):
+    if type(tfm) == type('PAD'):
+        if tfm.lower() == 'pad_val' or tfm.lower() == 'pad':
+            tfm = PAD_VAL
+        elif tfm.lower() == 'nopad_val' or tfm.lower() == 'nopad':
+            tfm = NOPAD_VAL
+        else:
+            tfm = None
+
+
+    data_path = './record_images'
+    # label_path = './test_labels'
+
+    data_names = read_data_names('./record_labels')
+    labels = np.ones((len(data_names),136))*100
+
     dset_test = CoordDataset(data_path, labels, data_names, transform_list=tfm)
 
     loader_test = DataLoader(dataset=dset_test, batch_size=batch_size, shuffle=shuffle)

@@ -5,6 +5,8 @@ import pandas as pd
 import warnings
 from PIL import Image
 
+DOT_SIZE = 10
+
 #############################
 #
 #       리팩토링 완료
@@ -13,7 +15,7 @@ from PIL import Image
 
 def plot_image(image, coord_red = None, coord_gr = None, coord_bl = None,
                line_red = None, line_gr = None, line_bl = None,
-               segmap = None, ref_segmap = None, alpha = 0.3, off_scaling = False):
+               segmap = None, segmap_ref = None, alpha = 0.3, off_scaling = False):
     #각각 coord들을 독립적으로 변경
 
     if not type(image) == type(np.ones(2)): #for PIL image
@@ -39,19 +41,19 @@ def plot_image(image, coord_red = None, coord_gr = None, coord_bl = None,
         coord_red = np.copy(coord_red.reshape(-1, 2))
         if coord_red.flatten()[0] < 1:
             coord_red = to_absolute(coord_red)
-        plt.scatter(coord_red[:, 0], coord_red[:, 1], s=1.2, c='red')
+        plt.scatter(coord_red[:, 0], coord_red[:, 1], s=DOT_SIZE, c='red')
 
     if coord_gr is not None:
         coord_gr = np.copy(coord_gr.reshape(-1, 2))
         if coord_gr.flatten()[0] < 1:
             coord_gr = to_absolute(coord_gr)
-        plt.scatter(coord_gr[:, 0], coord_gr[:, 1], s=1.2, c=green)
+        plt.scatter(coord_gr[:, 0], coord_gr[:, 1], s=DOT_SIZE, c=green)
 
     if coord_bl is not None:
         coord_bl = np.copy(coord_bl.reshape(-1, 2))
         if coord_bl.flatten()[0] < 1:
             coord_bl = to_absolute(coord_bl)
-        plt.scatter(coord_bl[:, 0], coord_bl[:, 1], s=1.2, c='blue')
+        plt.scatter(coord_bl[:, 0], coord_bl[:, 1], s=DOT_SIZE, c='blue')
 
     if line_red is not None:
         line = np.copy(line_red.reshape(-1, 2))
@@ -81,11 +83,11 @@ def plot_image(image, coord_red = None, coord_gr = None, coord_bl = None,
         segmap = hwc(segmap)
         segmap[:, :, (1, 2)] = 0
 
-        if ref_segmap is not None:
-            ref_segmap = ref_segmap.reshape(H, W)
-            ref_segmap = hwc(ref_segmap)
-            ref_segmap[:, :, (0, 2)] = 0  # green for gt
-            plt.imshow(image * (1 - 2 * alpha) + segmap * alpha + ref_segmap * alpha)
+        if segmap_ref is not None:
+            segmap_ref = segmap_ref.reshape(H, W)
+            segmap_ref = hwc(segmap_ref)
+            segmap_ref[:, :, (0, 2)] = 0  # green for gt
+            plt.imshow(image * (1 - 2 * alpha) + segmap * alpha + segmap_ref * alpha)
         else:
             plt.imshow(image * (1 - alpha) + segmap * alpha)
 
@@ -163,7 +165,12 @@ def read_images(data_location, data_names):
     image_list = []
     for data_name in data_names:
         im = Image.open(os.path.join(data_location, data_name))
-        im = hwc(np.asarray(im))
+        im = np.asarray(im)
+        if len(im.shape) ==3:
+            print(im.shape)
+            im = np.mean(im, axis = 2)
+
+        im = hwc(im)
         image_list.append(im)
     return image_list
 
@@ -202,10 +209,12 @@ def write_labels(labels, label_location, relative = False, title = None):
     pd.DataFrame(labels).to_csv(path, header=False, index=False)
 
 def hwc(nparr):
+    nparr = np.squeeze(nparr)
     H,W = nparr.shape
     img = nparr.reshape((H,W,1)).repeat(3, axis = 2)
     return img
 def chw(nparr):
+    nparr = np.squeeze(nparr)
     H,W = nparr.shape
     img = nparr.reshape((1,H,W)).repeat(3, axis = 0)
     return img

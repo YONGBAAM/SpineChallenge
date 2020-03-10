@@ -395,7 +395,8 @@ def post_way2(label_pred_abs, degree = 6, full = False):
         return slopes
 
 def postprocess_inte(pred_path, images, labels_gt_abs, title=None, save_plot=False, automatic=False,
-                     automatic_time = 10, degree = 6, method1_on = True, method2_on = True, method2_ver = None):
+                     automatic_time = 10, degree = 6, method1_on = True, method2_on = True, method2_ver = None,
+                     original_display = True):
     author = 'YB'
 
     ############################
@@ -421,6 +422,7 @@ def postprocess_inte(pred_path, images, labels_gt_abs, title=None, save_plot=Fal
 
     result_list = []
     for ind, image in enumerate(images):
+        print('Saved {}'.format(ind))
 
         gt = labels_gt_abs[ind]
 
@@ -485,8 +487,10 @@ def postprocess_inte(pred_path, images, labels_gt_abs, title=None, save_plot=Fal
                 left = center - norm_slope * 50
                 if method2_on:
                     plt.plot([left[0], right[0]], [left[1], right[1]], color='blue')
-
-            plot_image(image, coord_red=fitted_preds, coord_gr=gt)
+            if original_display:
+                plot_image(image, coord_red=fitted_preds, coord_gr=gt)
+            else:
+                plot_image(image, coord_red=fitted_preds)
             if method1_on and not method2_on:
                 plt_title = 'a %.1f/p1 %.1f/err%% %.2f' % \
                             (gt_angles[0], w1_angles[0], w1_error * 100)
@@ -499,6 +503,7 @@ def postprocess_inte(pred_path, images, labels_gt_abs, title=None, save_plot=Fal
                 plt.show()
                 plt.pause(automatic_time)
                 plt.close()
+
             if save_plot:
                 if title is None:
                     title = 'pred'
@@ -543,7 +548,19 @@ if __name__ == '__main__':
 
 
     pred_path = './model/34_Fin_Grad_ep3986'
-    plt.rcParams["figure.figsize"] = (4, 8)
+    plt.rcParams["figure.figsize"] = (16, 32)
 
     postprocess_inte(pred_path=pred_path, images=test_images,
-                     labels_gt_abs=test_labels, title='Distribute', save_plot=True)
+                     labels_gt_abs=test_labels, title=None, save_plot=True, method2_on=True, method1_on= False, original_display=True)
+
+    # test_label_location = './record_labels'
+    # test_data_location = './record_images'
+    # test_data_names = read_data_names(test_label_location)
+    # test_labels = read_labels(test_label_location)
+    # test_images = read_images(test_data_location, test_data_names)
+    #
+    # pred_path = './model/34_Fin_Grad_ep3986'
+    # plt.rcParams["figure.figsize"] = (8, 16)
+    #
+    # postprocess_inte(pred_path=pred_path, images=test_images,
+    #                  labels_gt_abs=test_labels, title=None, save_plot=True, method2_on=True, method1_on= False, original_display=False)

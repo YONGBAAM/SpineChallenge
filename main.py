@@ -5,7 +5,7 @@ import torch.nn as nn
 
 
 from label_io import read_data_names, read_labels, plot_image, chw, hwc
-from dataset import CoordDataset, get_loader_train, get_loader_test, get_loader_train_val
+from dataset import CoordDataset, get_loader_train, get_loader_test, get_loader_train_val, get_loader_record
 from model import SegmentNet, LandmarkNet, get_classifier_deep, SpinalStructured, get_classifier_conv
 from train import Trainer
 
@@ -33,12 +33,15 @@ config = dict(num_epochs=6000, learning_rates=1e-5, save_every=200,
               is_lr_decay=True, lrdecay_thres=0.1, lrdecay_every=200, lrdecay_window = 50,
               model_save_dest="./model", dropout_prob=0.5
               )
-batch_size = 24
-config['model_name'] = '34_Fin_Grad'
+batch_size = 32
+config['model_name'] = '34_Fin_Grad_v2'
 
 ####    DataLoader
 loader_train = get_loader_train(tfm = 'nopad', batch_size=batch_size, shuffle=True)
+loader_val2 = get_loader_train(tfm = 'nopad_val', batch_size=1, shuffle = False)
 loader_val = get_loader_test(tfm = 'nopad', batch_size = 1, shuffle = False )
+
+loader_record = get_loader_record(tfm = 'nopad', batch_size = 1, shuffle = False )
 ####    MODEL 101_deep
 model_101 = LandmarkNet(resnet_dim=101, classifier = get_classifier_deep(config['dropout_prob']), requires_grad=True).to(device)
 ####    MODEL 34_swallow
@@ -63,25 +66,19 @@ cl34 = nn.Sequential(*[#512 16 8 for 34
     nn.Linear(4096,136)
 
 ])
-model = LandmarkNet(resnet_dim=34, classifier = cl34, requires_grad=True).to(device)
 
-####    For testing
-# model = nn.Sequential(*[
-#     nn.Conv2d(1,16,3,padding = 1),
-#     nn.ReLU(),
-#     nn.AdaptiveAvgPool2d(8),
-#     nn.Flatten(),
-#     nn.Linear(8*8*16,136)
-# ])
-# model.to(device)
+model = LandmarkNet(resnet_dim=34, classifier = cl34, requires_grad=True).to(device)
 
 trainer = Trainer(model=model,
                   optimizer=torch.optim.Adam(model.parameters(), lr=config['learning_rates']),
-                  loader_train = loader_train, loader_val = loader_val, criterion = nn.SmoothL1Loss(), **config)
+                  loader_train = loader_train, loader_val = loader_val2, criterion = nn.SmoothL1Loss(), **config)
+                  #loader_train = loader_train, loader_val = loader_val, criterion = nn.SmoothL1Loss(), **config)
 
-#trainer.load_model('101_Fin_Grad_ep4207_tL5.98e-04_vL3.74e-04', model_only = False)
-#trainer.test(test_loader = loader_val, load_model_name='34_Fin_Grad_ep3986_tL2.61e-04_vL3.98e-04', save_image=False)
-trainer.train()
+#trainer.load_model('34_Fin_Grad_ep3986_tL2.61e-04_vL3.98e-04', model_only = False)
+# trainer.test(test_loader = loader_val, load_model_name='34_Fin_Grad_ep3986_tL2.61e-04_vL3.98e-04', save_image=True)
+trainer.test(test_loader = loader_val, load_model_name='34_Fin_Grad_ep3986_tL2.61e-04_vL3.98e-04', save_image=False)
+#trainer.train()
+
 
 
 
