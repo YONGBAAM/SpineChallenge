@@ -176,6 +176,29 @@ def get_loader_train(tfm = 'nopad', batch_size = 64, shuffle = False):
 
     loader_train = DataLoader(dataset=dset_train, batch_size=batch_size, shuffle=shuffle)
     return loader_train
+def get_loader_trtest(tfm = 'nopad', batch_size = 64, shuffle = False):
+    if type(tfm) == type('PAD'):
+        if tfm.lower() == 'pad_val':
+            tfm = PAD_VAL
+        elif tfm.lower() == 'nopad_val':
+            tfm = NOPAD_VAL
+        elif tfm.lower() == 'pad' or tfm.lower() == 'unf' or tfm.lower() == 'uniform':
+            tfm = UNF
+        elif tfm.lower() == 'nopad':
+            tfm = NOPAD
+        elif tfm.lower() == 'rhp':
+            tfm = RHP
+        else:
+            tfm = None
+
+    data_path = './trtest_images'
+    label_path = './trtest_labels'
+    labels = read_labels(label_path)
+    data_names = read_data_names(label_path)
+    dset_train = CoordDataset(data_path, labels, data_names, transform_list=tfm)
+
+    loader_train = DataLoader(dataset=dset_train, batch_size=batch_size, shuffle=shuffle)
+    return loader_train
 
 def get_loader_test(tfm = 'nopad', batch_size = 1, shuffle = False):
     if type(tfm) == type('PAD'):
@@ -205,17 +228,37 @@ def get_loader_record(tfm = 'nopad', batch_size = 1, shuffle = False):
         else:
             tfm = None
 
-
     data_path = './record_images'
-    # label_path = './test_labels'
+    label_path = './record_labels'
 
-    data_names = read_data_names('./record_labels')
-    labels = np.ones((len(data_names),136))*100
+    data_names = read_data_names(label_path)
+    labels = read_labels(label_path)
 
     dset_test = CoordDataset(data_path, labels, data_names, transform_list=tfm)
 
     loader_test = DataLoader(dataset=dset_test, batch_size=batch_size, shuffle=shuffle)
     return loader_test
+
+def get_loader_record_crop(tfm = 'nopad', batch_size = 1, shuffle = False):
+    if type(tfm) == type('PAD'):
+        if tfm.lower() == 'pad_val' or tfm.lower() == 'pad':
+            tfm = PAD_VAL
+        elif tfm.lower() == 'nopad_val' or tfm.lower() == 'nopad':
+            tfm = NOPAD_VAL
+        else:
+            tfm = None
+
+    data_path = './record_cr_images_final'
+    label_path = './record_cr_labels'
+
+    data_names = read_data_names(label_path)
+    labels = read_labels(label_path)
+
+    dset_test = CoordDataset(data_path, labels, data_names, transform_list=tfm)
+
+    loader_test = DataLoader(dataset=dset_test, batch_size=batch_size, shuffle=shuffle)
+    return loader_test
+
 
 if __name__ == '__main__':
     ############Dataset, transform test

@@ -6,6 +6,7 @@ import torch.nn as nn
 
 from label_io import read_data_names, read_labels, plot_image, chw, hwc
 from dataset import CoordDataset, get_loader_train, get_loader_test, get_loader_train_val, get_loader_record
+from dataset import get_loader_record,get_loader_record_crop,get_loader_trtest
 from model import SegmentNet, LandmarkNet, get_classifier_deep, SpinalStructured, get_classifier_conv
 from train import Trainer
 
@@ -41,7 +42,10 @@ loader_train = get_loader_train(tfm = 'nopad', batch_size=batch_size, shuffle=Tr
 loader_val2 = get_loader_train(tfm = 'nopad_val', batch_size=1, shuffle = False)
 loader_val = get_loader_test(tfm = 'nopad', batch_size = 1, shuffle = False )
 
+loader_trtest = get_loader_trtest(batch_size = batch_size, shuffle = True)
+
 loader_record = get_loader_record(tfm = 'nopad', batch_size = 1, shuffle = False )
+loader_record_crop = get_loader_record_crop()
 ####    MODEL 101_deep
 model_101 = LandmarkNet(resnet_dim=101, classifier = get_classifier_deep(config['dropout_prob']), requires_grad=True).to(device)
 ####    MODEL 34_swallow
@@ -76,7 +80,7 @@ trainer = Trainer(model=model,
 
 #trainer.load_model('34_Fin_Grad_ep3986_tL2.61e-04_vL3.98e-04', model_only = False)
 # trainer.test(test_loader = loader_val, load_model_name='34_Fin_Grad_ep3986_tL2.61e-04_vL3.98e-04', save_image=True)
-trainer.test(test_loader = loader_val, load_model_name='34_Fin_Grad_ep3986_tL2.61e-04_vL3.98e-04', save_image=False)
+trainer.test(test_loader = loader_record, load_model_name='34_Fin_Grad_ep3986_tL2.61e-04_vL3.98e-04', save_image=False)
 #trainer.train()
 
 
