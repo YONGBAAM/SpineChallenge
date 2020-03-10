@@ -29,7 +29,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available()  else "cpu")
 # TRAINING           ##############
 ###################################
 
-config = dict(num_epochs=6000, learning_rates=1e-5, save_every=200,
+config = dict(num_epochs=6000, learning_rates=1e-5, save_every=25,
               all_model_save=0.99,
               is_lr_decay=True, lrdecay_thres=0.1, lrdecay_every=200, lrdecay_window = 50,
               model_save_dest="./model", dropout_prob=0.5
@@ -75,13 +75,13 @@ model = LandmarkNet(resnet_dim=34, classifier = cl34, requires_grad=True).to(dev
 
 trainer = Trainer(model=model,
                   optimizer=torch.optim.Adam(model.parameters(), lr=config['learning_rates']),
-                  loader_train = loader_train, loader_val = loader_val2, criterion = nn.SmoothL1Loss(), **config)
+                  loader_train = loader_trtest, loader_val = loader_record_crop, criterion = nn.SmoothL1Loss(), **config)
                   #loader_train = loader_train, loader_val = loader_val, criterion = nn.SmoothL1Loss(), **config)
 
 #trainer.load_model('34_Fin_Grad_ep3986_tL2.61e-04_vL3.98e-04', model_only = False)
 # trainer.test(test_loader = loader_val, load_model_name='34_Fin_Grad_ep3986_tL2.61e-04_vL3.98e-04', save_image=True)
-trainer.test(test_loader = loader_record, load_model_name='34_Fin_Grad_ep3986_tL2.61e-04_vL3.98e-04', save_image=False)
-#trainer.train()
+# trainer.test(test_loader = loader_record_crop, load_model_name='34_Fin_Grad_ep3986_tL2.61e-04_vL3.98e-04', save_image=False)
+trainer.train()
 
 
 
