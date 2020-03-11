@@ -12,24 +12,38 @@ plt.rcParams["figure.figsize"] = (6,12)
 
 # plt.ion()
 from label_io import read_data_names, write_labels, read_labels
+
 data_names = read_data_names('./record_labels')
 labels = read_labels('./record_labels')
 
 ori_location = './record_images'
-lr_location = './record_cr_images_left'
-cr_location = './record_cr_images'
+lr_location = './Old/record_cr_images_left'
 
+# leftright만 자르기
 
-lbcr = read_labels('./record_cr_labels')
-for i,n in enumerate(data_names):
-    img = Image.open(osj('./record_cr_images_final',n))
-    img = np.array(img)
-    plt.figure()
-    plot_image(img, lbcr[i])
-    plt.savefig('./plots/cr_{}.png'.format(i))
-    plt.close()
-#left save는 ~left에 하기
-#얼마나 잘랐는지도 저장해놓기
+labels_cr = []
+for i, n in enumerate(data_names):
+    txt_names = n.split('.')[0] + '.txt'
+    label_ori = labels[i].reshape(-1, 2)
+    im_ori = Image.open(osj(ori_location, n))
+    im_ori = np.asarray(im_ori)
+
+    im_lr = Image.open(osj(lr_location, n))
+    im_lr = np.asarray(im_lr)
+
+    Hori, Wori = im_ori.shape[0], im_ori.shape[1]
+    Hlr, Wlr = im_lr.shape[0], im_lr.shape[1]
+
+    topcrop = Hori - Hlr
+    leftcrop = Wori - Wlr
+
+    label_crop = np.zeros((68, 2))
+    label_crop[:, 0] = label_ori[:, 0] - leftcrop
+    label_crop[:, 1] = label_ori[:, 1] - topcrop
+    labels_cr.append(label_crop.flatten())
+
+labels_cr = np.array(labels_cr)
+write_labels(labels_cr, './record_cr_labels_v2')
 
 def record_crop():
     data_names = read_data_names('./record_labels')

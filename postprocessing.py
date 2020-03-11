@@ -532,23 +532,19 @@ def postprocess_inte(pred_path, images, labels_gt_abs, title=None, save_plot=Fal
     return result_list
 
 if __name__ == '__main__':
-    test_label_location = './test_labels'
-    test_data_location = './test_images'
+    test_label_location = './record_cr_labels_v2'
+    test_data_location = './record_cr_images_v2'
     test_data_names = read_data_names(test_label_location)
     test_labels = read_labels(test_label_location)
     test_images = read_images(test_data_location, test_data_names)
-    train_label_location = './train_labels'
-    train_image_location = './train_images'
-
-    train_labels = read_labels(train_label_location)
 
     #determine_degree(train_labels)
 
     #get slope distribution
 
 
-    pred_path = './model/34_Fin_Grad_ep3986'
-    plt.rcParams["figure.figsize"] = (16, 32)
+    pred_path = './model/34_Fin_Grad_ep3986_v2'
+    plt.rcParams["figure.figsize"] = (8, 16)
 
     postprocess_inte(pred_path=pred_path, images=test_images,
                      labels_gt_abs=test_labels, title=None, save_plot=True, method2_on=True, method1_on= False, original_display=True)

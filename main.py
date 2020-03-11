@@ -35,7 +35,7 @@ config = dict(num_epochs=6000, learning_rates=1e-5, save_every=25,
               model_save_dest="./model", dropout_prob=0.5
               )
 batch_size = 32
-config['model_name'] = '34_Fin_Grad_v2'
+config['model_name'] = 'TRTEST'
 
 ####    DataLoader
 loader_train = get_loader_train(tfm = 'nopad', batch_size=batch_size, shuffle=True)
@@ -72,15 +72,15 @@ cl34 = nn.Sequential(*[#512 16 8 for 34
 ])
 
 model = LandmarkNet(resnet_dim=34, classifier = cl34, requires_grad=True).to(device)
-
+# from dataset import get_loader_record_v2
 trainer = Trainer(model=model,
                   optimizer=torch.optim.Adam(model.parameters(), lr=config['learning_rates']),
                   loader_train = loader_trtest, loader_val = loader_record_crop, criterion = nn.SmoothL1Loss(), **config)
-                  #loader_train = loader_train, loader_val = loader_val, criterion = nn.SmoothL1Loss(), **config)
+                  # loader_train = loader_train, loader_val = loader_val, criterion = nn.SmoothL1Loss(), **config)
 
-#trainer.load_model('34_Fin_Grad_ep3986_tL2.61e-04_vL3.98e-04', model_only = False)
+trainer.load_model('TRTEST_ep323_tL6.61e-04_vL1.51e-03.tar', model_only = False)
 # trainer.test(test_loader = loader_val, load_model_name='34_Fin_Grad_ep3986_tL2.61e-04_vL3.98e-04', save_image=True)
-# trainer.test(test_loader = loader_record_crop, load_model_name='34_Fin_Grad_ep3986_tL2.61e-04_vL3.98e-04', save_image=False)
+# trainer.test(test_loader = get_loader_record_v2(), load_model_name='34_Fin_Grad_ep3986_tL2.61e-04_vL3.98e-04', save_image=False)
 trainer.train()
 
 

@@ -248,8 +248,28 @@ def get_loader_record_crop(tfm = 'nopad', batch_size = 1, shuffle = False):
         else:
             tfm = None
 
-    data_path = './record_cr_images_final'
+    data_path = './record_cr_images'
     label_path = './record_cr_labels'
+
+    data_names = read_data_names(label_path)
+    labels = read_labels(label_path)
+
+    dset_test = CoordDataset(data_path, labels, data_names, transform_list=tfm)
+
+    loader_test = DataLoader(dataset=dset_test, batch_size=batch_size, shuffle=shuffle)
+    return loader_test
+
+def get_loader_record_v2(tfm = 'nopad', batch_size = 1, shuffle = False):
+    if type(tfm) == type('PAD'):
+        if tfm.lower() == 'pad_val' or tfm.lower() == 'pad':
+            tfm = PAD_VAL
+        elif tfm.lower() == 'nopad_val' or tfm.lower() == 'nopad':
+            tfm = NOPAD_VAL
+        else:
+            tfm = None
+
+    data_path = './record_cr_images_v2'
+    label_path = './record_cr_labels_v2'
 
     data_names = read_data_names(label_path)
     labels = read_labels(label_path)
