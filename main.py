@@ -6,7 +6,7 @@ import torch.nn as nn
 
 from label_io import read_data_names, read_labels, plot_image, chw, hwc
 from dataset import CoordDataset, get_loader_train, get_loader_test, get_loader_train_val, get_loader_record
-from dataset import get_loader_record,get_loader_record_crop,get_loader_trtest
+from dataset import get_loader_record,get_loader_record_crop,get_loader_trtest, get_loader_record_v2
 from model import SegmentNet, LandmarkNet, get_classifier_deep, SpinalStructured, get_classifier_conv
 from train import Trainer
 
@@ -44,8 +44,6 @@ loader_val = get_loader_test(tfm = 'nopad', batch_size = 1, shuffle = False )
 
 loader_trtest = get_loader_trtest(batch_size = batch_size, shuffle = True)
 
-loader_record = get_loader_record(tfm = 'nopad', batch_size = 1, shuffle = False )
-loader_record_crop = get_loader_record_crop()
 ####    MODEL 101_deep
 model_101 = LandmarkNet(resnet_dim=101, classifier = get_classifier_deep(config['dropout_prob']), requires_grad=True).to(device)
 ####    MODEL 34_swallow
@@ -75,13 +73,13 @@ model = LandmarkNet(resnet_dim=34, classifier = cl34, requires_grad=True).to(dev
 # from dataset import get_loader_record_v2
 trainer = Trainer(model=model,
                   optimizer=torch.optim.Adam(model.parameters(), lr=config['learning_rates']),
-                  loader_train = loader_trtest, loader_val = loader_record_crop, criterion = nn.SmoothL1Loss(), **config)
+                  loader_train = loader_trtest, loader_val = get_loader_record(), criterion = nn.SmoothL1Loss(), **config)
                   # loader_train = loader_train, loader_val = loader_val, criterion = nn.SmoothL1Loss(), **config)
 
-trainer.load_model('TRTEST_ep2875_tL2.83e-04_vL1.61e-03.tar', model_only = False)
+# trainer.load_model('TRTEST_ep2875_tL2.83e-04_vL1.61e-03.tar', model_only = False)
 # trainer.test(test_loader = loader_val, load_model_name='34_Fin_Grad_ep3986_tL2.61e-04_vL3.98e-04', save_image=True)
-# trainer.test(test_loader = get_loader_record_v2(), load_model_name='34_Fin_Grad_ep3986_tL2.61e-04_vL3.98e-04', save_image=False)
-trainer.train()
+trainer.test(test_loader = get_loader_record_crop(), load_model_name='TRTEST_ep4278_tL2.75e-04_vL1.66e-03.tar', save_image=False)
+# trainer.train()
 
 
 

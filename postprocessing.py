@@ -406,7 +406,7 @@ def postprocess_inte(pred_path, images, labels_gt_abs, title=None, save_plot=Fal
     #   Do not adjust other settings.
     #
     ############################
-    if not os.path.exists(os.path.join(pred_path, 'labels_pred_abs.csv')):
+    if True:
         preds_rel = read_labels(pred_path, title='labels_pred_rel')
         preds = []
         for ind, pred_rel in enumerate(preds_rel):
@@ -416,8 +416,6 @@ def postprocess_inte(pred_path, images, labels_gt_abs, title=None, save_plot=Fal
             preds.append(pred_abs)
         preds = np.asarray(preds)
         write_labels(preds, label_location=pred_path, title='labels_pred_abs')
-    else:
-        preds = read_labels(pred_path, title='labels_pred_abs')
     preds = label_sort(preds)
 
     result_list = []
@@ -527,13 +525,13 @@ def postprocess_inte(pred_path, images, labels_gt_abs, title=None, save_plot=Fal
     print('Avg : w1_e %.2f / w2_e %.2f '%(np.average(w1_errors), np.average(w2_errors)))
 
     df = pd.DataFrame(result_list)
-    df.to_csv(os.path.join(pred_path, 'result_' + title + '_%.2f'%(np.average(w2_errors)*100) + '.csv'))
+    df.to_csv(os.path.join(pred_path,title, 'result_' + title + '_%.2f'%(np.average(w2_errors)*100) + '.csv'))
 
     return result_list
 
 if __name__ == '__main__':
-    test_label_location = './record_cr_labels_v2'
-    test_data_location = './record_cr_images_v2'
+    test_label_location = './record_labels'
+    test_data_location = './record_images'
     test_data_names = read_data_names(test_label_location)
     test_labels = read_labels(test_label_location)
     test_images = read_images(test_data_location, test_data_names)
@@ -543,7 +541,7 @@ if __name__ == '__main__':
     #get slope distribution
 
 
-    pred_path = './model/34_Fin_Grad_ep3986_v2'
+    pred_path = './model/TRTEST_ep4278'
     plt.rcParams["figure.figsize"] = (8, 16)
 
     postprocess_inte(pred_path=pred_path, images=test_images,
