@@ -29,7 +29,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available()  else "cpu")
 # TRAINING           ##############
 ###################################
 
-config = dict(num_epochs=6000, learning_rates=1e-5, save_every=25,
+config = dict(num_epochs=60000, learning_rates=1e-5, save_every=250,
               all_model_save=0.99,
               is_lr_decay=True, lrdecay_thres=0.1, lrdecay_every=200, lrdecay_window = 50,
               model_save_dest="./model", dropout_prob=0.5
@@ -78,7 +78,7 @@ trainer = Trainer(model=model,
                   loader_train = loader_trtest, loader_val = loader_record_crop, criterion = nn.SmoothL1Loss(), **config)
                   # loader_train = loader_train, loader_val = loader_val, criterion = nn.SmoothL1Loss(), **config)
 
-trainer.load_model('TRTEST_ep323_tL6.61e-04_vL1.51e-03.tar', model_only = False)
+trainer.load_model('TRTEST_ep2875_tL2.83e-04_vL1.61e-03.tar', model_only = False)
 # trainer.test(test_loader = loader_val, load_model_name='34_Fin_Grad_ep3986_tL2.61e-04_vL3.98e-04', save_image=True)
 # trainer.test(test_loader = get_loader_record_v2(), load_model_name='34_Fin_Grad_ep3986_tL2.61e-04_vL3.98e-04', save_image=False)
 trainer.train()
