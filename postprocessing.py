@@ -530,23 +530,31 @@ def postprocess_inte(pred_path, images, labels_gt_abs, title=None, save_plot=Fal
     return result_list
 
 if __name__ == '__main__':
-    test_label_location = './record_labels'
-    test_data_location = './record_images'
+    plt.rcParams["figure.figsize"] = (8, 16)
+    #test랑 record 변환은 메인에서 하지말고 여기서만 하면됨
+
+    record_label_location = './record_cr_labels'
+    record_data_location = './record_cr_images'
+    record_data_names = read_data_names(record_label_location)
+    record_labels = read_labels(record_label_location)
+    record_images = read_images(record_data_location, record_data_names)
+
+    pred_path = './model/TRTEST_ep4278'
+    postprocess_inte(pred_path=pred_path, images=record_images,
+                     labels_gt_abs=record_labels, title=None, save_plot=True, method2_on=True, method1_on= False, original_display=True)
+
+    ###Validation set
+
+    test_label_location = './test_labels'
+    test_data_location = './test_images'
     test_data_names = read_data_names(test_label_location)
     test_labels = read_labels(test_label_location)
     test_images = read_images(test_data_location, test_data_names)
-
-    #determine_degree(train_labels)
-
-    #get slope distribution
-
-
-    pred_path = './model/TRTEST_ep4278'
+    pred_path = './model/34_Fin_Grad_ep3986'
     plt.rcParams["figure.figsize"] = (8, 16)
 
     postprocess_inte(pred_path=pred_path, images=test_images,
                      labels_gt_abs=test_labels, title=None, save_plot=True, method2_on=True, method1_on= False, original_display=True)
-
     # test_label_location = './record_labels'
     # test_data_location = './record_images'
     # test_data_names = read_data_names(test_label_location)

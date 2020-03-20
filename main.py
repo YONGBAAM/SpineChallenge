@@ -78,7 +78,7 @@ trainer = Trainer(model=model,
 
 # trainer.load_model('TRTEST_ep2875_tL2.83e-04_vL1.61e-03.tar', model_only = False)
 # trainer.test(test_loader = loader_val, load_model_name='34_Fin_Grad_ep3986_tL2.61e-04_vL3.98e-04', save_image=True)
-trainer.test(test_loader = get_loader_record_crop(), load_model_name='TRTEST_ep4278_tL2.75e-04_vL1.66e-03.tar', save_image=False)
+trainer.test(test_loader = get_loader_test(), load_model_name='34_Fin_Grad_ep3986_tL2.61e-04_vL3.98e-04', save_image=False)
 # trainer.train()
 
 
