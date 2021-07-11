@@ -1,4 +1,6 @@
 # SpineChallenge
 
 This repo was only used for backup
-Since it was very old work, I will renew it to enable evaluation.
+
+# Test run
+You could run main.py then you will see test output in images in model/TRTEST_ep4278
